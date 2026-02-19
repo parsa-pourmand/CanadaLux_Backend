@@ -2,9 +2,11 @@ const express = require('express');
 const users = require('./routes/users');
 const auth = require('./routes/auth');
 const invoices = require('./routes/invoices');
+const Payment = require('./models/Payment');
 const mongoose = require('mongoose');
 const config = require('config');
 const winston = require('winston');
+const c = require('config');
 
 // Configure Winston
 winston.add(new winston.transports.Console({
@@ -20,6 +22,7 @@ app.use(express.json());
 app.use('/api/users', users)
 app.use('/api/auth', auth)
 app.use('/api/invoices', invoices)
+app.use('/api/payments', require('./routes/payments'))
 
 if (!config.get('jwtPrivateKey')) {
     winston.error('FATAL ERROR: jwtPrivateKey is not defined.');

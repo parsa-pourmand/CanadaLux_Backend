@@ -36,6 +36,7 @@ const invoiceSchema = new mongoose.Schema(
       min: 0,
       validate: {
         validator: function (v) {
+          if (this && typeof this.getUpdate === "function") return true;
           // balance should never exceed amount
           return v <= this.amount;
         },
