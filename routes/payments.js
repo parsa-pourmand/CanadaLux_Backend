@@ -1,7 +1,9 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const { Payment, validatePayment, validatePaymentPatch } = require('../models/Payment');
 const {Invoice} = require('../models/Invoice');
 const auth = require('../middleware/auth');
+const generateDocumentNumber = require('../utils/generator');
 
 const router = express.Router();
 
@@ -15,42 +17,78 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
+
 // Create a new payment
-router.post('/', auth, async (req, res) => {
+router.post("/", auth, async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
+    // Validate body (userId comes from auth)
     const { error } = validatePayment({ ...req.body, userId: req.user._id });
-    if (error) return res.status(400).send(error.details[0].message || error.details[0].context.custom);
-
-    const invoice = await Invoice.findOne({ _id: req.body.invoiceId, userId: req.user._id });
-    if (!invoice) return res.status(404).send('Invoice not found.');
-
-    // Check if payment amount exceeds invoice balance
-    if (req.body.amount > invoice.balance) {
-      return res.status(400).send('Payment amount cannot exceed invoice balance.');
+    if (error) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).send(error.details[0].message || error.details[0].context?.custom);
     }
 
-    const payment = new Payment({
-      userId: req.user._id,
-      invoiceId: req.body.invoiceId,
-      paymentNumber: req.body.paymentNumber,
-      amount: req.body.amount,
-      date: req.body.date, // optional; model defaults
-      method: req.body.method,
-      notes: req.body.notes,
+    // Find invoice inside the transaction
+    const invoice = await Invoice.findOne(
+      { _id: req.body.invoiceId, userId: req.user._id },
+      null,
+      { session }
+    );
+
+    if (!invoice) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(404).send("Invoice not found.");
+    }
+
+    // Prevent overpayment
+    if (req.body.amount > invoice.balance) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).send("Payment amount cannot exceed invoice balance.");
+    }
+
+    // Generate payment number (must use the SAME session)
+    const paymentNumber = await generateDocumentNumber({
+      type: "payment",
+      prefix: "PAY",
+      session,
     });
 
-    await payment.save();
+    // Create payment
+    const payment = new Payment({
+      userId: req.user._id,
+      invoiceId: invoice._id,
+      paymentNumber,
+      amount: req.body.amount,
+      method: req.body.method,
+      notes: req.body.notes,
+      ...(req.body.date ? { date: req.body.date } : {}), // only set if provided
+    });
 
-    // Update the invoice balance
-    invoice.balance -= payment.amount;
-    await invoice.save();
+    await payment.save({ session });
 
-    res.status(201).send(payment);
+    // Update invoice balance
+    invoice.balance = Number((invoice.balance - payment.amount).toFixed(2));
+
+    await invoice.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res.status(201).send(payment);
   } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+
     if (err.code === 11000 && err.keyPattern?.paymentNumber) {
-      return res.status(409).send('Payment number already exists.');
+      return res.status(409).send("Payment number already exists.");
     }
-    res.status(500).send(err.message);
+    return res.status(500).send(err.message);
   }
 });
 

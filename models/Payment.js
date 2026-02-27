@@ -51,7 +51,6 @@ function validatePayment(payment) {
     const schema = Joi.object({
         userId: objectId.required(),
         invoiceId: objectId.required(),
-        paymentNumber: Joi.string().required(),
         amount: Joi.number().greater(0).required(),
         date: Joi.date(),
         method: Joi.string().valid('Credit Card', 'PayPal', 'Bank Transfer', 'Cash', 'Other').required(),

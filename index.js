@@ -2,7 +2,8 @@ const express = require('express');
 const users = require('./routes/users');
 const auth = require('./routes/auth');
 const invoices = require('./routes/invoices');
-const Payment = require('./models/Payment');
+const payment = require('./routes/payments');
+const orders = require('./routes/orders');
 const mongoose = require('mongoose');
 const config = require('config');
 const winston = require('winston');
@@ -22,7 +23,8 @@ app.use(express.json());
 app.use('/api/users', users)
 app.use('/api/auth', auth)
 app.use('/api/invoices', invoices)
-app.use('/api/payments', require('./routes/payments'))
+app.use('/api/payments', payment)
+app.use('/api/orders', orders)
 
 if (!config.get('jwtPrivateKey')) {
     winston.error('FATAL ERROR: jwtPrivateKey is not defined.');
