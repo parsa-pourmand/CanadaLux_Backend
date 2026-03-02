@@ -1,6 +1,7 @@
 const express = require("express");
 const { Invoice, validate, validateUpdate } = require("../models/Invoice");
 const auth = require("../middleware/auth");
+const { Payment } = require("../models/Payment");
 
 const router = express.Router();
 
@@ -57,29 +58,40 @@ router.get("/:id", auth, async (req, res) => {
   }
 });
 
+
 // Update an invoice by ID
 router.patch("/:id", auth, async (req, res) => {
   try {
     const { error } = validateUpdate(req.body);
-    if (error) return res.status(400).send(error.details[0].message || error.details[0].context.custom);
+    if (error) return res.status(400).send(error.details[0].message || error.details[0].context?.custom);
 
-    const invoice = await Invoice.findOneAndUpdate(
-      { _id: req.params.id, userId: req.user._id },
-      {
-        $set: {
-          ...req.body,
-        },
-      },
-      { new: true, runValidators: true } 
-    );
-
+    const invoice = await Invoice.findOne({ _id: req.params.id, userId: req.user._id });
     if (!invoice) return res.status(404).send("Invoice not found.");
+
+    // Check if invoice has any payment activity
+    const hasPayments = await Payment.exists({ invoiceId: invoice._id, userId: req.user._id });
+
+    // If there are payments, block changing amount
+    if (hasPayments) {
+      const blockedFields = ["amount"]; 
+      const isTryingToEditBlocked = blockedFields.some((f) => req.body[f] !== undefined);
+
+      if (isTryingToEditBlocked) {
+        return res
+          .status(403)
+          .send("This invoice cannot be modified (amount) because it has payment activity. Create an adjustment/refund instead.");
+      }
+    }
+
+    // Apply allowed updates
+    Object.assign(invoice, req.body);
+
+    await invoice.save(); // runs validators
     res.send(invoice);
   } catch (err) {
     if (err.code === 11000 && err.keyPattern?.invoiceNumber) {
       return res.status(409).send("Invoice number already exists.");
     }
-    // CastError invalid ObjectId, etc.
     res.status(400).send(err.message);
   }
 });
@@ -87,8 +99,18 @@ router.patch("/:id", auth, async (req, res) => {
 // Delete an invoice by ID
 router.delete("/:id", auth, async (req, res) => {
   try {
-    const invoice = await Invoice.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
+    const invoice = await Invoice.findOne({ _id: req.params.id, userId: req.user._id });
     if (!invoice) return res.status(404).send("Invoice not found.");
+
+    // Block delete if any payment exists
+    const hasPayments = await Payment.exists({ invoiceId: invoice._id, userId: req.user._id });
+    if (hasPayments) {
+      return res
+        .status(403)
+        .send("This invoice cannot be deleted because it has payment activity. Void/refund it instead.");
+    }
+
+    await invoice.deleteOne();
     res.send(invoice);
   } catch (err) {
     res.status(400).send("Invalid invoice id.");
