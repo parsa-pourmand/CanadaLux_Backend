@@ -112,4 +112,16 @@ router.patch('/', auth, async (req, res) => {
     }
 });
 
+router.delete('/', auth, async (req, res) => {
+    try {
+        const user = await User.findByIdAndDelete(req.user._id);
+
+        if (!user) return res.status(404).send('User not found.');
+
+        res.send('User deleted successfully.');
+    } catch (err) {
+        res.status(500).send(err.message);
+    }
+});
+
 module.exports = router;

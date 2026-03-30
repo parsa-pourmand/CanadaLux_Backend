@@ -4,6 +4,7 @@ const auth = require('./routes/auth');
 const invoices = require('./routes/invoices');
 const payment = require('./routes/payments');
 const orders = require('./routes/orders');
+const item = require('./routes/items');
 const mongoose = require('mongoose');
 const config = require('config');
 const winston = require('winston');
@@ -25,6 +26,7 @@ app.use('/api/auth', auth)
 app.use('/api/invoices', invoices)
 app.use('/api/payments', payment)
 app.use('/api/orders', orders)
+app.use('/api/items', item);
 
 if (!config.get('jwtPrivateKey')) {
     winston.error('FATAL ERROR: jwtPrivateKey is not defined.');
