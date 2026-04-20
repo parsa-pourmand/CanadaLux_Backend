@@ -61,6 +61,12 @@ const userSchema = new mongoose.Schema({
         default: 0,
         min: 0
     },
+    discount: {
+        type: Number,
+        default: 0,
+        min: 0,
+        max: 100
+    },
     createdAt: {
         type: Date,
         default: Date.now
@@ -69,7 +75,7 @@ const userSchema = new mongoose.Schema({
 
 userSchema.methods.generateAuthToken = function() {
     const token = jwt.sign(
-        { _id: this._id, Firstname: this.Firstname, Lastname: this.Lastname, email: this.email, points: this.points, shippingAddress: this.shippingAddress },
+        { _id: this._id, Firstname: this.Firstname, Lastname: this.Lastname, email: this.email, points: this.points, discount: this.discount, shippingAddress: this.shippingAddress },
         config.get('jwtPrivateKey')
     );
     return token;
@@ -85,7 +91,8 @@ function validateUser(user) {
         phoneNumber: Joi.string().max(20).allow('').required(),
         billingAddress: Joi.string().max(255).allow('').required(),
         shippingAddress: Joi.string().max(255).allow('').required(),
-        points: Joi.number().min(0).optional()
+        points: Joi.number().min(0).optional(),
+        discount: Joi.number().min(0).max(100).optional()
     });
     return schema.validate(user);
 }
@@ -97,7 +104,7 @@ function validateUserPatch(user) {
         oldPassword: Joi.string().min(5).max(255),
         phoneNumber: Joi.string().max(20).allow(''),
         billingAddress: Joi.string().max(255).allow(''),
-        shippingAddress: Joi.string().max(255).allow('')
+        shippingAddress: Joi.string().max(255).allow(''),
 
     }).min(1);
 

@@ -27,14 +27,16 @@ router.post('/', async (req, res) => {
         companyName: req.body.companyName || '',
         phoneNumber: req.body.phoneNumber || '',
         billingAddress: req.body.billingAddress || '',
-        shippingAddress: req.body.shippingAddress || ''
+        shippingAddress: req.body.shippingAddress || '',
+        points: req.body.points || 0,
+        discount: req.body.discount || 0
     });
 
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(user.password, salt);
 
     await user.save();
-
+    
     const token = user.generateAuthToken();
 
     res
@@ -48,7 +50,8 @@ router.post('/', async (req, res) => {
             'phoneNumber',
             'billingAddress',
             'shippingAddress',
-            'points'
+            'points',
+            'discount'
         ]));
 });
 

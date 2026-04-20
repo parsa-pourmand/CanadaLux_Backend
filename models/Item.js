@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 const Joi = require('joi');
 
-
 const itemSchema = new mongoose.Schema({
     name: {
         type: String,
@@ -49,10 +48,32 @@ const itemSchema = new mongoose.Schema({
         type: String,
         enum: ['Active', 'Inactive', 'Discontinued'],
         default: 'Active'
+    },
+    hst: {
+        type: Number,
+        enum: [0, 13],
+        default: 0
+    },
+    onSale: {
+        type: Boolean,
+        default: false
+    },
+    salePercentage: {
+        type: Number,
+        min: 0,
+        max: 100,
+        default: 0,
+        validate: {
+            validator: function (value) {
+                if (this.onSale) return value > 0;
+                return value === 0;
+            },
+            message: 'salePercentage must be greater than 0 when onSale is true, and 0 when onSale is false.'
+        }
     }
 }, { timestamps: true });
 
-itemSchema.index({ sku: 1 }, { unique: true, sparse: true });       
+itemSchema.index({ sku: 1 }, { unique: true, sparse: true });
 
 const Item = mongoose.model('Item', itemSchema);
 
@@ -65,11 +86,19 @@ function validateItem(item) {
         sellingPrice: Joi.number().min(0).required(),
         purchasingPrice: Joi.number().min(0).required(),
         stockQuantity: Joi.number().integer().min(0).required(),
-        status: Joi.string().valid('Active', 'Inactive', 'Discontinued')
+        status: Joi.string().valid('Active', 'Inactive', 'Discontinued'),
+        hst: Joi.number().valid(0, 13),
+        onSale: Joi.boolean().default(false),
+        salePercentage: Joi.number().min(0).max(100).when('onSale', {
+            is: true,
+            then: Joi.number().min(0.01).max(100).required(),
+            otherwise: Joi.number().valid(0).default(0)
+        })
     });
 
     return schema.validate(item);
 }
+
 function validatePatch(item) {
     const schema = Joi.object({
         name: Joi.string().min(2).max(255),
@@ -79,11 +108,15 @@ function validatePatch(item) {
         sellingPrice: Joi.number().min(0),
         purchasingPrice: Joi.number().min(0),
         stockQuantity: Joi.number().integer().min(0),
-        status: Joi.string().valid('Active', 'Inactive', 'Discontinued')
+        status: Joi.string().valid('Active', 'Inactive', 'Discontinued'),
+        hst: Joi.number().valid(0, 13),
+        onSale: Joi.boolean(),
+        salePercentage: Joi.number().min(0).max(100)
     }).min(1);
 
     return schema.validate(item);
 }
+
 module.exports.Item = Item;
 module.exports.validate = validateItem;
 module.exports.validatePatch = validatePatch;

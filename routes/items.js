@@ -39,7 +39,8 @@ router.post('/', auth, async (req, res) => {
         sellingPrice: req.body.sellingPrice,
         purchasingPrice: req.body.purchasingPrice,
         stockQuantity: req.body.stockQuantity,
-        status: req.body.status || 'Active'
+        status: req.body.status || 'Active',
+        hst: req.body.hst || 0
     });
 
     try {
@@ -52,46 +53,34 @@ router.post('/', auth, async (req, res) => {
         res.status(500).send(err.message);
     }
 });
-
-// Update item
+// Update item 
 router.patch('/:id', auth, async (req, res) => {
-    const { error } = validatePatch(req.body);
-    if (error) return res.status(400).send(error.details[0].message);
-
-    const updateFields = {};
-
-    if (req.body.name !== undefined)
-        updateFields.name = req.body.name;
-
-    if (req.body.description !== undefined)
-        updateFields.description = req.body.description;
-
-    if (req.body.sku !== undefined)
-        updateFields.sku = req.body.sku || undefined;
-
-    if (req.body.image !== undefined)
-        updateFields.image = req.body.image;
-
-    if (req.body.sellingPrice !== undefined)
-        updateFields.sellingPrice = req.body.sellingPrice;
-
-    if (req.body.purchasingPrice !== undefined)
-        updateFields.purchasingPrice = req.body.purchasingPrice;
-
-    if (req.body.stockQuantity !== undefined)
-        updateFields.stockQuantity = req.body.stockQuantity;
-
-    if (req.body.status !== undefined)
-        updateFields.status = req.body.status;
-
     try {
+        const existingItem = await Item.findById(req.params.id);
+        if (!existingItem) return res.status(404).send('Item not found.');
+
+        const updatedData = {
+            name: req.body.name !== undefined ? req.body.name : existingItem.name,
+            description: req.body.description !== undefined ? req.body.description : existingItem.description,
+            image: req.body.image !== undefined ? req.body.image : existingItem.image,
+            sku: req.body.sku !== undefined ? req.body.sku : existingItem.sku,
+            sellingPrice: req.body.sellingPrice !== undefined ? req.body.sellingPrice : existingItem.sellingPrice,
+            purchasingPrice: req.body.purchasingPrice !== undefined ? req.body.purchasingPrice : existingItem.purchasingPrice,
+            stockQuantity: req.body.stockQuantity !== undefined ? req.body.stockQuantity : existingItem.stockQuantity,
+            status: req.body.status !== undefined ? req.body.status : existingItem.status,
+            hst: req.body.hst !== undefined ? req.body.hst : existingItem.hst,
+            onSale: req.body.onSale !== undefined ? req.body.onSale : existingItem.onSale,
+            salePercentage: req.body.salePercentage !== undefined ? req.body.salePercentage : existingItem.salePercentage
+        };
+
+        const { error } = validate(updatedData);
+        if (error) return res.status(400).send(error.details[0].message);
+
         const item = await Item.findByIdAndUpdate(
             req.params.id,
-            { $set: updateFields },
+            { $set: req.body },
             { new: true, runValidators: true }
         );
-
-        if (!item) return res.status(404).send('Item not found.');
 
         res.send(item);
     } catch (err) {

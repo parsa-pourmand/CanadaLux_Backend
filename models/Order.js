@@ -5,7 +5,7 @@ const lineItemSchema = new mongoose.Schema(
   {
     itemId: { type: mongoose.Schema.Types.ObjectId, ref: 'Item', required: true },
     quantity: { type: Number, required: true, min: 1 },
-    unitPrice: { type: Number, required: true, min: 0 }, // snapshot at order time
+    unitPrice: { type: Number, required: true, min: 0 }, // final per-unit price snapshot after sale + tax, before user discount
     notes: { type: String, trim: true, default: '' },
   },
   { _id: false }
@@ -38,7 +38,6 @@ const orderSchema = new mongoose.Schema(
         message: 'Order must include at least one line item.',
       },
     },
-    // Computed on server from lineItems + discount
     amount: {
       type: Number,
       required: true,
@@ -61,40 +60,114 @@ const orderSchema = new mongoose.Schema(
     discount: {
       type: Number,
       min: 0,
-      max: 100,
-      default: 0, // percentage
+      default: 0,
+    },
+    redeemedPoints: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    redeemedAmount: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    profit: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+    pointsEarned: {
+      type: Number,
+      min: 0,
+      default: 0,
     },
   },
   { timestamps: true }
 );
 
-// Unique per user
 orderSchema.index({ userId: 1, orderNumber: 1 }, { unique: true });
 
-// Compute amount from lineItems + discount (rounded to 2 decimals)
-orderSchema.pre('validate', function () {
-  const subtotal = (this.lineItems || []).reduce((sum, li) => {
-    const qty = Number(li.quantity || 0);
-    const price = Number(li.unitPrice || 0);
-    return sum + qty * price;
-  }, 0);
+orderSchema.pre('validate', async function (next) {
+  try {
+    const User = mongoose.model('User');
+    const Item = mongoose.model('Item');
 
-  const discount = Number(this.discount || 0);
-  const discountFactor = 1 - discount / 100;
+    const user = await User.findById(this.userId).select('discount');
+    const userDiscountPercent = Number(user?.discount || 0);
 
-  const total = subtotal * discountFactor;
+    let subtotalBeforeAnyDiscount = 0;   // original price + tax
+    let subtotalAfterSaleBeforeUser = 0; // sale-adjusted + tax
+    let profitBeforeUserDiscount = 0;    // sale-adjusted profit before user discount
 
-  // round to 2 decimals
-  this.amount = Math.round(total * 100) / 100;
+    for (const lineItem of this.lineItems || []) {
+      const item = await Item.findById(lineItem.itemId);
+      if (!item) throw new Error('Item not found.');
+
+      const quantity = Number(lineItem.quantity || 0);
+      const originalSellingPrice = Number(item.sellingPrice || 0);
+
+      let saleAdjustedSellingPrice = originalSellingPrice;
+      if (item.onSale && item.salePercentage > 0) {
+        saleAdjustedSellingPrice = originalSellingPrice * (1 - item.salePercentage / 100);
+      }
+
+      const taxMultiplier = Number(item.hst) === 13 ? 1.13 : 1;
+
+      const originalUnitPriceWithTax = originalSellingPrice * taxMultiplier;
+      const saleAdjustedUnitPriceWithTax = saleAdjustedSellingPrice * taxMultiplier;
+
+      subtotalBeforeAnyDiscount += originalUnitPriceWithTax * quantity;
+      subtotalAfterSaleBeforeUser += saleAdjustedUnitPriceWithTax * quantity;
+
+      lineItem.unitPrice = Math.round(saleAdjustedUnitPriceWithTax * 100) / 100;
+
+      const purchasingPrice = Number(item.purchasingPrice || 0);
+      const profitPerUnit = Math.max(0, saleAdjustedSellingPrice - purchasingPrice);
+      profitBeforeUserDiscount += profitPerUnit * quantity;
+    }
+
+    const userDiscountAmount = subtotalAfterSaleBeforeUser * (userDiscountPercent / 100);
+    const subtotalAfterUserDiscount = subtotalAfterSaleBeforeUser - userDiscountAmount;
+
+    // apply redeemed points
+    let redeemedAmount = Number(this.redeemedPoints || 0) / 100;
+
+    // don't allow over-discount
+    if (redeemedAmount > subtotalAfterUserDiscount) {
+      redeemedAmount = subtotalAfterUserDiscount;
+    }
+
+    const finalAmount = subtotalAfterUserDiscount - redeemedAmount;
+
+    // total discount includes sale + user discount + redeemed points
+    const totalDiscountAmount = subtotalBeforeAnyDiscount - finalAmount;
+
+    // adjust profit proportionally
+    let finalProfit = profitBeforeUserDiscount;
+
+    if (subtotalAfterSaleBeforeUser > 0) {
+      finalProfit *= subtotalAfterUserDiscount / subtotalAfterSaleBeforeUser;
+    }
+
+    if (subtotalAfterUserDiscount > 0) {
+      finalProfit *= finalAmount / subtotalAfterUserDiscount;
+    } else {
+      finalProfit = 0;
+    }
+
+    this.discount = Math.round(totalDiscountAmount * 100) / 100;
+    this.redeemedAmount = Math.round(redeemedAmount * 100) / 100;
+    this.amount = Math.round(finalAmount * 100) / 100;
+    this.profit = Math.round(Math.max(0, finalProfit) * 100) / 100;
+    this.pointsEarned = Math.floor(this.profit * 5);
+
+    next();
+  } catch (err) {
+    next(err);
+  }
 });
 
-const Order = mongoose.model('Order', orderSchema);
-
-/**
- * CREATE validation (POST)
- * - amount is NOT accepted from client (server computes it)
- * - unknown(false) blocks extra fields
- */
 function validateOrder(order) {
   const objectId = Joi.string().length(24).hex();
 
@@ -106,57 +179,46 @@ function validateOrder(order) {
         Joi.object({
           itemId: objectId.required(),
           quantity: Joi.number().integer().min(1).required(),
-          unitPrice: Joi.number().min(0).required(),
           notes: Joi.string().allow('').trim().optional(),
         }).unknown(false)
       )
       .min(1)
       .required(),
-
     orderedDate: Joi.date().optional(),
     shipmentDate: Joi.date().optional(),
     status: Joi.string().valid('Pending', 'Shipped', 'Delivered', 'Cancelled').optional(),
-    discount: Joi.number().min(0).max(100).optional(),
   }).unknown(false);
 
   return schema.validate(order);
 }
 
-/**
- * PATCH validation (optional but useful)
- * - all fields optional
- * - still blocks unknown keys
- * - amount is NOT patchable by client
- */
 function validateOrderPatch(order) {
   const objectId = Joi.string().length(24).hex();
 
   const schema = Joi.object({
     project: objectId.optional(),
     orderNumber: Joi.string().trim().optional(),
-
     lineItems: Joi.array()
       .items(
         Joi.object({
           itemId: objectId.required(),
           quantity: Joi.number().integer().min(1).required(),
-          unitPrice: Joi.number().min(0).required(),
           notes: Joi.string().allow('').trim().optional(),
         }).unknown(false)
       )
       .min(1)
       .optional(),
-
     orderedDate: Joi.date().optional(),
     shipmentDate: Joi.date().optional(),
     status: Joi.string().valid('Pending', 'Shipped', 'Delivered', 'Cancelled').optional(),
-    discount: Joi.number().min(0).max(100).optional(),
   })
     .min(1)
     .unknown(false);
 
   return schema.validate(order);
 }
+
+const Order = mongoose.model('Order', orderSchema);
 
 module.exports = {
   Order,
