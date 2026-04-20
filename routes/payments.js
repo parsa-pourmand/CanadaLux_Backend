@@ -1,7 +1,8 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const { Payment, validatePayment, validatePaymentPatch } = require('../models/Payment');
-const {Invoice} = require('../models/Invoice');
+const { PaymentAllocation } = require('../models/PaymentAllocation');
+const { Invoice } = require('../models/Invoice');
 const auth = require('../middleware/auth');
 const generateDocumentNumber = require('../utils/generator');
 
@@ -17,146 +18,129 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-
-// Create a new payment
-router.post("/", auth, async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
-  try {
-    // Validate body (userId comes from auth)
-    const { error } = validatePayment({ ...req.body, userId: req.user._id });
-    if (error) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(400).send(error.details[0].message || error.details[0].context?.custom);
-    }
-
-    // Find invoice inside the transaction
-    const invoice = await Invoice.findOne(
-      { _id: req.body.invoiceId, userId: req.user._id },
-      null,
-      { session }
-    );
-
-    if (!invoice) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(404).send("Invoice not found.");
-    }
-
-    // Prevent overpayment
-    if (req.body.amount > invoice.balance) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(400).send("Payment amount cannot exceed invoice balance.");
-    }
-
-    // Generate payment number (must use the SAME session)
-    const paymentNumber = await generateDocumentNumber({
-      type: "payment",
-      prefix: "PAY",
-      session,
-    });
-
-    // Create payment
-    const payment = new Payment({
-      userId: req.user._id,
-      invoiceId: invoice._id,
-      paymentNumber,
-      amount: req.body.amount,
-      method: req.body.method,
-      notes: req.body.notes,
-      ...(req.body.date ? { date: req.body.date } : {}), // only set if provided
-    });
-
-    await payment.save({ session });
-
-    // Update invoice balance
-    invoice.balance = Number((invoice.balance - payment.amount).toFixed(2));
-
-    await invoice.save({ session });
-
-    await session.commitTransaction();
-    session.endSession();
-
-    return res.status(201).send(payment);
-  } catch (err) {
-    await session.abortTransaction();
-    session.endSession();
-
-    if (err.code === 11000 && err.keyPattern?.paymentNumber) {
-      return res.status(409).send("Payment number already exists.");
-    }
-    return res.status(500).send(err.message);
-  }
-});
-
-// Get a specific payment by ID
+// Get a specific payment by ID, with allocations
 router.get('/:id', auth, async (req, res) => {
   try {
     const payment = await Payment.findOne({ _id: req.params.id, userId: req.user._id });
     if (!payment) return res.status(404).send('Payment not found.');
-    res.send(payment);
+
+    const allocations = await PaymentAllocation.find({
+      paymentId: payment._id,
+      userId: req.user._id,
+    }).sort('createdAt');
+
+    res.send({ payment, allocations });
   } catch (err) {
     res.status(400).send('Invalid payment id.');
   }
-}); 
+});
+
+// Create a new payment and auto-apply it to oldest unpaid invoices first
+router.post('/', auth, async (req, res) => {
+  const session = await mongoose.startSession();
+
+  try {
+    const { error } = validatePayment({ ...req.body, userId: req.user._id });
+    if (error) {
+      return res.status(400).send(error.details[0].message || error.details[0].context?.custom);
+    }
+
+    let createdPayment;
+    let createdAllocations = [];
+
+    await session.withTransaction(async () => {
+      const unpaidInvoices = await Invoice.find(
+        {
+          userId: req.user._id,
+          balance: { $gt: 0 },
+        },
+        null,
+        { session }
+      ).sort({ dateIssued: 1, _id: 1 });
+
+      if (!unpaidInvoices.length) {
+        const e = new Error('There are no unpaid invoices for this customer.');
+        e.statusCode = 400;
+        throw e;
+      }
+
+      let remainingAmount = Number(req.body.amount);
+
+      const paymentNumber = await generateDocumentNumber({
+        type: 'payment',
+        prefix: 'PAY',
+        session,
+      });
+
+      const payment = new Payment({
+        userId: req.user._id,
+        paymentNumber,
+        amount: Number(req.body.amount),
+        unappliedAmount: 0,
+        method: req.body.method,
+        notes: req.body.notes,
+        ...(req.body.date ? { date: req.body.date } : {}),
+      });
+
+      await payment.save({ session });
+
+      for (const invoice of unpaidInvoices) {
+        if (remainingAmount <= 0) break;
+
+        const invoiceBalance = Number(invoice.balance || 0);
+        if (invoiceBalance <= 0) continue;
+
+        const amountApplied = Math.min(invoiceBalance, remainingAmount);
+
+        invoice.balance = Number((invoiceBalance - amountApplied).toFixed(2));
+        await invoice.save({ session });
+
+        const allocation = new PaymentAllocation({
+          userId: req.user._id,
+          paymentId: payment._id,
+          invoiceId: invoice._id,
+          amountApplied: Number(amountApplied.toFixed(2)),
+        });
+
+        await allocation.save({ session });
+        createdAllocations.push(allocation);
+
+        remainingAmount = Number((remainingAmount - amountApplied).toFixed(2));
+      }
+
+      payment.unappliedAmount = Number(Math.max(0, remainingAmount).toFixed(2));
+      await payment.save({ session });
+
+      createdPayment = payment;
+    });
+
+    res.status(201).send({
+      payment: createdPayment,
+      allocations: createdAllocations,
+    });
+  } catch (err) {
+    if (err.statusCode) return res.status(err.statusCode).send(err.message);
+    if (err.code === 11000 && err.keyPattern?.paymentNumber) {
+      return res.status(409).send('Payment number already exists.');
+    }
+    res.status(500).send(err.message);
+  } finally {
+    session.endSession();
+  }
+});
 
 // Update a payment by ID
+// Keep this intentionally limited: metadata only
 router.patch('/:id', auth, async (req, res) => {
   try {
     const { error } = validatePaymentPatch(req.body);
-    if (error) return res.status(400).send(error.details[0].message || error.details[0].context.custom);
+    if (error) {
+      return res.status(400).send(error.details[0].message || error.details[0].context?.custom);
+    }
 
     const payment = await Payment.findOne({ _id: req.params.id, userId: req.user._id });
     if (!payment) return res.status(404).send('Payment not found.');
 
-    const oldInvoiceId = String(payment.invoiceId);
-    const newInvoiceId = String(req.body.invoiceId ?? payment.invoiceId);
-
-    const oldAmount = payment.amount;
-    const newAmount = req.body.amount ?? payment.amount;
-
-    // Load the old invoice (must belong to the user)
-    const oldInvoice = await Invoice.findOne({ _id: oldInvoiceId, userId: req.user._id });
-    if (!oldInvoice) return res.status(404).send('Invoice not found.');
-
-    // Load the target invoice (could be the same as old)
-    const targetInvoice =
-      newInvoiceId === oldInvoiceId
-        ? oldInvoice
-        : await Invoice.findOne({ _id: newInvoiceId, userId: req.user._id });
-
-    if (!targetInvoice) return res.status(404).send('New invoice not found.');
-
-    // Update invoice balances safely
-    if (newInvoiceId === oldInvoiceId) {
-      // Same invoice: only the difference matters
-      const diff = newAmount - oldAmount; // new - old
-      if (diff > targetInvoice.balance) {
-        return res.status(400).send('Payment amount cannot exceed invoice balance.');
-      }
-
-      targetInvoice.balance -= diff;
-      await targetInvoice.save();
-    } else {
-      // Invoice changed: refund old invoice, charge new invoice
-      if (newAmount > targetInvoice.balance) {
-        return res.status(400).send('Payment amount cannot exceed invoice balance.');
-      }
-
-      oldInvoice.balance += oldAmount;
-      targetInvoice.balance -= newAmount;
-
-      await oldInvoice.save();
-      await targetInvoice.save();
-    }
-
-    // Apply only provided fields (avoid overwriting with undefined)
-    if (req.body.invoiceId !== undefined) payment.invoiceId = req.body.invoiceId;
-    if (req.body.paymentNumber !== undefined) payment.paymentNumber = req.body.paymentNumber;
-    if (req.body.amount !== undefined) payment.amount = req.body.amount;
     if (req.body.date !== undefined) payment.date = req.body.date;
     if (req.body.method !== undefined) payment.method = req.body.method;
     if (req.body.notes !== undefined) payment.notes = req.body.notes;
@@ -172,24 +156,69 @@ router.patch('/:id', auth, async (req, res) => {
   }
 });
 
-
+// Delete a payment by ID and restore all affected invoice balances
 router.delete('/:id', auth, async (req, res) => {
+  const session = await mongoose.startSession();
+
   try {
-    const payment = await Payment.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
-    if (!payment) return res.status(404).send('Payment not found.');
+    let deletedPayment;
+    let deletedAllocations = [];
 
-    // Update the invoice balance
-    const invoice = await Invoice.findOne({ _id: payment.invoiceId, userId: req.user._id });
-    if (invoice) {
-      invoice.balance += payment.amount;
-      await invoice.save();
-    }
+    await session.withTransaction(async () => {
+      const payment = await Payment.findOne(
+        { _id: req.params.id, userId: req.user._id },
+        null,
+        { session }
+      );
 
-    res.send(payment);
+      if (!payment) {
+        const e = new Error('Payment not found.');
+        e.statusCode = 404;
+        throw e;
+      }
+
+      const allocations = await PaymentAllocation.find(
+        { paymentId: payment._id, userId: req.user._id },
+        null,
+        { session }
+      );
+
+      for (const allocation of allocations) {
+        const invoice = await Invoice.findOne(
+          { _id: allocation.invoiceId, userId: req.user._id },
+          null,
+          { session }
+        );
+
+        if (invoice) {
+          invoice.balance = Number((Number(invoice.balance || 0) + Number(allocation.amountApplied || 0)).toFixed(2));
+          await invoice.save({ session });
+        }
+      }
+
+      await PaymentAllocation.deleteMany(
+        { paymentId: payment._id, userId: req.user._id },
+        { session }
+      );
+
+      deletedPayment = await Payment.findOneAndDelete(
+        { _id: payment._id, userId: req.user._id },
+        { session }
+      );
+
+      deletedAllocations = allocations;
+    });
+
+    res.send({
+      payment: deletedPayment,
+      allocations: deletedAllocations,
+    });
   } catch (err) {
-    res.status(400).send('Invalid payment id.');
+    if (err.statusCode) return res.status(err.statusCode).send(err.message);
+    res.status(500).send(err.message);
+  } finally {
+    session.endSession();
   }
 });
-
 
 module.exports = router;

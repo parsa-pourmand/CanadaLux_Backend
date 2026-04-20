@@ -1,43 +1,46 @@
 const mongoose = require('mongoose');
 const Joi = require('joi');
 
-const paymentSchema = new mongoose.Schema({
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true,
-  },
-  invoiceId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Invoice',
-    required: true,
-  },
-  paymentNumber: {
-    type: String,
-    required: true,
-    trim: true,
-  },
-  amount: {
-    type: Number,
-    required: true,
-    min: 0.01,
-  },
-  date: {
-    type: Date,
-    default: Date.now,
-    required: true,
-  },
+const paymentSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    paymentNumber: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    amount: {
+      type: Number,
+      required: true,
+      min: 0.01,
+    },
+    unappliedAmount: {
+      type: Number,
+      required: true,
+      min: 0,
+      default: 0,
+    },
+    date: {
+      type: Date,
+      default: Date.now,
+      required: true,
+    },
     method: {
-    type: String,
-    enum: ['Credit Card', 'PayPal', 'Bank Transfer', 'Cash', 'Other'],
-    required: true,
+      type: String,
+      enum: ['Credit Card', 'PayPal', 'Bank Transfer', 'Cash', 'Other'],
+      required: true,
+    },
+    notes: {
+      type: String,
+      trim: true,
+      default: '',
+    },
   },
-  notes: {
-    type: String,
-    trim: true,
-  },
-}, 
-    { timestamps: true }
+  { timestamps: true }
 );
 
 paymentSchema.index({ userId: 1, paymentNumber: 1 }, { unique: true });
@@ -45,35 +48,28 @@ paymentSchema.index({ userId: 1, paymentNumber: 1 }, { unique: true });
 const Payment = mongoose.model('Payment', paymentSchema);
 
 function validatePayment(payment) {
+  const schema = Joi.object({
+    userId: Joi.string().length(24).hex().required(),
+    amount: Joi.number().greater(0).required(),
+    date: Joi.date().optional(),
+    method: Joi.string()
+      .valid('Credit Card', 'PayPal', 'Bank Transfer', 'Cash', 'Other')
+      .required(),
+    notes: Joi.string().allow('').trim().optional(),
+  }).unknown(false);
 
-    const objectId = Joi.string().length(24).hex();
-
-    const schema = Joi.object({
-        userId: objectId.required(),
-        invoiceId: objectId.required(),
-        amount: Joi.number().greater(0).required(),
-        date: Joi.date(),
-        method: Joi.string().valid('Credit Card', 'PayPal', 'Bank Transfer', 'Cash', 'Other').required(),
-        notes: Joi.string().allow('').trim(),
-    });
-    return schema.validate(payment);
+  return schema.validate(payment);
 }
 
-
+// Keep patch very limited for safety
 function validatePaymentPatch(payment) {
-  const objectId = Joi.string().length(24).hex();
-
   const schema = Joi.object({
-
-    invoiceId: objectId,
-    paymentNumber: Joi.string().trim(),
-    amount: Joi.number().greater(0),
-    date: Joi.date(),
-    method: Joi.string().valid('Credit Card', 'PayPal', 'Bank Transfer', 'Cash', 'Other'),
-    notes: Joi.string().allow('').trim(),
+    date: Joi.date().optional(),
+    method: Joi.string().valid('Credit Card', 'PayPal', 'Bank Transfer', 'Cash', 'Other').optional(),
+    notes: Joi.string().allow('').trim().optional(),
   })
-    .min(1) // must provide at least one field
-    .unknown(false); // reject extra fields
+    .min(1)
+    .unknown(false);
 
   return schema.validate(payment);
 }
@@ -81,5 +77,5 @@ function validatePaymentPatch(payment) {
 module.exports = {
   Payment,
   validatePayment,
-  validatePaymentPatch
+  validatePaymentPatch,
 };
