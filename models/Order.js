@@ -88,84 +88,72 @@ const orderSchema = new mongoose.Schema(
 
 orderSchema.index({ userId: 1, orderNumber: 1 }, { unique: true });
 
-orderSchema.pre('validate', async function (next) {
-  try {
-    const User = mongoose.model('User');
-    const Item = mongoose.model('Item');
+orderSchema.pre('validate', async function () {
+  const User = mongoose.model('User');
+  const Item = mongoose.model('Item');
 
-    const user = await User.findById(this.userId).select('discount');
-    const userDiscountPercent = Number(user?.discount || 0);
+  const user = await User.findById(this.userId).select('discount');
+  const userDiscountPercent = Number(user?.discount || 0);
 
-    let subtotalBeforeAnyDiscount = 0;   // original price + tax
-    let subtotalAfterSaleBeforeUser = 0; // sale-adjusted + tax
-    let profitBeforeUserDiscount = 0;    // sale-adjusted profit before user discount
+  let subtotalBeforeAnyDiscount = 0;
+  let subtotalAfterSaleBeforeUser = 0;
+  let profitBeforeUserDiscount = 0;
 
-    for (const lineItem of this.lineItems || []) {
-      const item = await Item.findById(lineItem.itemId);
-      if (!item) throw new Error('Item not found.');
+  for (const lineItem of this.lineItems || []) {
+    const item = await Item.findById(lineItem.itemId);
+    if (!item) throw new Error('Item not found.');
 
-      const quantity = Number(lineItem.quantity || 0);
-      const originalSellingPrice = Number(item.sellingPrice || 0);
+    const quantity = Number(lineItem.quantity || 0);
+    const originalSellingPrice = Number(item.sellingPrice || 0);
 
-      let saleAdjustedSellingPrice = originalSellingPrice;
-      if (item.onSale && item.salePercentage > 0) {
-        saleAdjustedSellingPrice = originalSellingPrice * (1 - item.salePercentage / 100);
-      }
-
-      const taxMultiplier = Number(item.hst) === 13 ? 1.13 : 1;
-
-      const originalUnitPriceWithTax = originalSellingPrice * taxMultiplier;
-      const saleAdjustedUnitPriceWithTax = saleAdjustedSellingPrice * taxMultiplier;
-
-      subtotalBeforeAnyDiscount += originalUnitPriceWithTax * quantity;
-      subtotalAfterSaleBeforeUser += saleAdjustedUnitPriceWithTax * quantity;
-
-      lineItem.unitPrice = Math.round(saleAdjustedUnitPriceWithTax * 100) / 100;
-
-      const purchasingPrice = Number(item.purchasingPrice || 0);
-      const profitPerUnit = Math.max(0, saleAdjustedSellingPrice - purchasingPrice);
-      profitBeforeUserDiscount += profitPerUnit * quantity;
+    let saleAdjustedSellingPrice = originalSellingPrice;
+    if (item.onSale && item.salePercentage > 0) {
+      saleAdjustedSellingPrice = originalSellingPrice * (1 - item.salePercentage / 100);
     }
 
-    const userDiscountAmount = subtotalAfterSaleBeforeUser * (userDiscountPercent / 100);
-    const subtotalAfterUserDiscount = subtotalAfterSaleBeforeUser - userDiscountAmount;
+    const taxMultiplier = Number(item.hst) === 13 ? 1.13 : 1;
 
-    // apply redeemed points
-    let redeemedAmount = Number(this.redeemedPoints || 0) / 100;
+    const originalUnitPriceWithTax = originalSellingPrice * taxMultiplier;
+    const saleAdjustedUnitPriceWithTax = saleAdjustedSellingPrice * taxMultiplier;
 
-    // don't allow over-discount
-    if (redeemedAmount > subtotalAfterUserDiscount) {
-      redeemedAmount = subtotalAfterUserDiscount;
-    }
+    subtotalBeforeAnyDiscount += originalUnitPriceWithTax * quantity;
+    subtotalAfterSaleBeforeUser += saleAdjustedUnitPriceWithTax * quantity;
 
-    const finalAmount = subtotalAfterUserDiscount - redeemedAmount;
+    lineItem.unitPrice = Math.round(saleAdjustedUnitPriceWithTax * 100) / 100;
 
-    // total discount includes sale + user discount + redeemed points
-    const totalDiscountAmount = subtotalBeforeAnyDiscount - finalAmount;
-
-    // adjust profit proportionally
-    let finalProfit = profitBeforeUserDiscount;
-
-    if (subtotalAfterSaleBeforeUser > 0) {
-      finalProfit *= subtotalAfterUserDiscount / subtotalAfterSaleBeforeUser;
-    }
-
-    if (subtotalAfterUserDiscount > 0) {
-      finalProfit *= finalAmount / subtotalAfterUserDiscount;
-    } else {
-      finalProfit = 0;
-    }
-
-    this.discount = Math.round(totalDiscountAmount * 100) / 100;
-    this.redeemedAmount = Math.round(redeemedAmount * 100) / 100;
-    this.amount = Math.round(finalAmount * 100) / 100;
-    this.profit = Math.round(Math.max(0, finalProfit) * 100) / 100;
-    this.pointsEarned = Math.floor(this.profit * 5);
-
-    next();
-  } catch (err) {
-    next(err);
+    const purchasingPrice = Number(item.purchasingPrice || 0);
+    const profitPerUnit = Math.max(0, saleAdjustedSellingPrice - purchasingPrice);
+    profitBeforeUserDiscount += profitPerUnit * quantity;
   }
+
+  const userDiscountAmount = subtotalAfterSaleBeforeUser * (userDiscountPercent / 100);
+  const subtotalAfterUserDiscount = subtotalAfterSaleBeforeUser - userDiscountAmount;
+
+  let redeemedAmount = Number(this.redeemedPoints || 0) / 100;
+  if (redeemedAmount > subtotalAfterUserDiscount) {
+    redeemedAmount = subtotalAfterUserDiscount;
+  }
+
+  const finalAmount = subtotalAfterUserDiscount - redeemedAmount;
+  const totalDiscountAmount = subtotalBeforeAnyDiscount - finalAmount;
+
+  let finalProfit = profitBeforeUserDiscount;
+
+  if (subtotalAfterSaleBeforeUser > 0) {
+    finalProfit *= subtotalAfterUserDiscount / subtotalAfterSaleBeforeUser;
+  }
+
+  if (subtotalAfterUserDiscount > 0) {
+    finalProfit *= finalAmount / subtotalAfterUserDiscount;
+  } else {
+    finalProfit = 0;
+  }
+
+  this.discount = Math.round(totalDiscountAmount * 100) / 100;
+  this.redeemedAmount = Math.round(redeemedAmount * 100) / 100;
+  this.amount = Math.round(finalAmount * 100) / 100;
+  this.profit = Math.round(Math.max(0, finalProfit) * 100) / 100;
+  this.pointsEarned = Math.floor(this.profit * 5);
 });
 
 function validateOrder(order) {
@@ -185,6 +173,7 @@ function validateOrder(order) {
       .min(1)
       .required(),
     orderedDate: Joi.date().optional(),
+    redeemAllPoints: Joi.boolean().optional(),
     shipmentDate: Joi.date().optional(),
     status: Joi.string().valid('Pending', 'Shipped', 'Delivered', 'Cancelled').optional(),
   }).unknown(false);

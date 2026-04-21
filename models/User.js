@@ -70,12 +70,17 @@ const userSchema = new mongoose.Schema({
     createdAt: {
         type: Date,
         default: Date.now
+    },
+    role: {
+        type: String,
+        enum: ['user', 'admin'],
+        default: 'user'
     }
 });
 
 userSchema.methods.generateAuthToken = function() {
     const token = jwt.sign(
-        { _id: this._id, Firstname: this.Firstname, Lastname: this.Lastname, email: this.email, points: this.points, discount: this.discount, shippingAddress: this.shippingAddress },
+        { _id: this._id, Firstname: this.Firstname, Lastname: this.Lastname, email: this.email, points: this.points, discount: this.discount, shippingAddress: this.shippingAddress, role: this.role },
         config.get('jwtPrivateKey')
     );
     return token;
@@ -91,8 +96,7 @@ function validateUser(user) {
         phoneNumber: Joi.string().max(20).allow('').required(),
         billingAddress: Joi.string().max(255).allow('').required(),
         shippingAddress: Joi.string().max(255).allow('').required(),
-        points: Joi.number().min(0).optional(),
-        discount: Joi.number().min(0).max(100).optional()
+        
     });
     return schema.validate(user);
 }

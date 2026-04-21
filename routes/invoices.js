@@ -2,6 +2,7 @@ const express = require("express");
 const { Invoice, validate, validateUpdate } = require("../models/Invoice");
 const auth = require("../middleware/auth");
 const { Payment } = require("../models/Payment");
+const hasInvoicePaymentActivity = require('../utils/hasInvoicePaymentActivity');
 
 const router = express.Router();
 
@@ -69,7 +70,7 @@ router.patch("/:id", auth, async (req, res) => {
     if (!invoice) return res.status(404).send("Invoice not found.");
 
     // Check if invoice has any payment activity
-    const hasPayments = await Payment.exists({ invoiceId: invoice._id, userId: req.user._id });
+    const hasPayments = await hasInvoicePaymentActivity(invoice._id, req.user._id);
 
     // If there are payments, block changing amount
     if (hasPayments) {
@@ -103,7 +104,8 @@ router.delete("/:id", auth, async (req, res) => {
     if (!invoice) return res.status(404).send("Invoice not found.");
 
     // Block delete if any payment exists
-    const hasPayments = await Payment.exists({ invoiceId: invoice._id, userId: req.user._id });
+    const hasPayments = await hasInvoicePaymentActivity(invoice._id, req.user._id);
+
     if (hasPayments) {
       return res
         .status(403)

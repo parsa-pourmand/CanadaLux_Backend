@@ -4,6 +4,7 @@ const auth = require('../middleware/auth');
 const { Order, validateOrder, validateOrderPatch } = require('../models/Order');
 const { Invoice } = require('../models/Invoice');
 const { Payment } = require('../models/Payment');
+const hasInvoicePaymentActivity = require('../utils/hasInvoicePaymentActivity');
 const generateDocumentNumber = require('../utils/generator');
 const { Item } = require('../models/Item');
 const { User } = require('../models/User');
@@ -183,7 +184,8 @@ router.patch('/:id', auth, async (req, res) => {
         const invoice = await Invoice.findOne({ orderId: order._id, userId: req.user._id }).session(session);
 
         if (invoice) {
-          const hasPayments = await Payment.exists({ invoiceId: invoice._id, userId: req.user._id }).session(session);
+          const hasPayments = await hasInvoicePaymentActivity(invoice._id, req.user._id, session);
+
           if (hasPayments) {
             const e = new Error(
               'This order cannot be modified (line items/order/project/etc.) because its invoice has payment activity. Create an adjustment or a new invoice instead.'
@@ -239,7 +241,6 @@ router.patch('/:id', auth, async (req, res) => {
         }
 
         // Sync invoice
-        const invoice = await Invoice.findOne({ orderId: order._id, userId: req.user._id }).session(session);
         if (invoice) {
           invoice.amount = order.amount;
           invoice.balance = order.amount;
@@ -301,7 +302,8 @@ router.delete('/:id', auth, async (req, res) => {
       const invoice = await Invoice.findOne({ orderId: order._id, userId: req.user._id }).session(session);
 
       if (invoice) {
-        const hasPayments = await Payment.exists({ invoiceId: invoice._id, userId: req.user._id }).session(session);
+        const hasPayments = await hasInvoicePaymentActivity(invoice._id, req.user._id, session);
+
         if (hasPayments) {
           const e = new Error('Cannot delete this order because its invoice has payment activity. Deletion is disabled.');
           e.statusCode = 403;

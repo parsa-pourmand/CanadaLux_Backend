@@ -28,8 +28,7 @@ router.post('/', async (req, res) => {
         phoneNumber: req.body.phoneNumber || '',
         billingAddress: req.body.billingAddress || '',
         shippingAddress: req.body.shippingAddress || '',
-        points: req.body.points || 0,
-        discount: req.body.discount || 0
+        
     });
 
     const salt = await bcrypt.genSalt(10);
@@ -114,6 +113,8 @@ router.patch('/', auth, async (req, res) => {
         res.status(500).send(err.message);
     }
 });
+
+
 
 router.delete('/', auth, async (req, res) => {
     try {

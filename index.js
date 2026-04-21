@@ -1,5 +1,6 @@
 const express = require('express');
 const users = require('./routes/users');
+const admin = require('./routes/admin');
 const auth = require('./routes/auth');
 const invoices = require('./routes/invoices');
 const payment = require('./routes/payments');
@@ -22,6 +23,7 @@ const port = process.env.PORT || 3000;
 
 app.use(express.json());
 app.use('/api/users', users)
+app.use('/api/admin', admin);
 app.use('/api/auth', auth)
 app.use('/api/invoices', invoices)
 app.use('/api/payments', payment)
