@@ -11,6 +11,9 @@ const item = require('./routes/items');
 const mongoose = require('mongoose');
 const winston = require('winston');
 const c = require('config');
+const helmet = require('helmet');
+const cors = require('cors');
+
 
 // Configure Winston
 winston.add(new winston.transports.Console({
@@ -19,10 +22,28 @@ winston.add(new winston.transports.Console({
 
 const app = express();
 
+app.disable('x-powered-by');
+app.use(helmet());
 
 const port = process.env.PORT || 3000;
 
-app.use(express.json());
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  process.env.FRONTEND_URL
+].filter(Boolean);
+
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Not allowed by CORS'));
+  }
+}));
+
+app.use(express.json({ limit: '100kb' }));
+app.use(express.urlencoded({ extended: true, limit: '100kb' }));
+
 app.use('/api/users', users)
 app.use('/api/admin', admin);
 app.use('/api/auth', auth)
