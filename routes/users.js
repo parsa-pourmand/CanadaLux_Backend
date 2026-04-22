@@ -3,6 +3,8 @@ const { User, validate, validatePatch } = require('../models/User');
 const bcrypt = require('bcrypt');
 const _ = require('lodash');
 const auth = require('../middleware/auth');
+const admin = require('../middleware/admin');
+const { registerLimiter } = require('../middleware/rateLimiter');
 
 const router = express.Router();
 
@@ -12,7 +14,7 @@ router.get('/', auth, async (req, res) => {
     res.send(user);
 });
 
-router.post('/', async (req, res) => {
+router.post('/', registerLimiter, async (req, res) => {
     const { error } = validate(req.body);
     if (error) return res.status(400).send(error.details[0].message);
 
@@ -38,9 +40,9 @@ router.post('/', async (req, res) => {
     
     const token = user.generateAuthToken();
 
-    res
-        .header('x-auth-token', token)
-        .send(_.pick(user, [
+    res.status(201).send({
+        token,
+        user: _.pick(user, [
             '_id',
             'Firstname',
             'Lastname',
@@ -50,8 +52,10 @@ router.post('/', async (req, res) => {
             'billingAddress',
             'shippingAddress',
             'points',
-            'discount'
-        ]));
+            'discount',
+            'role'
+        ])
+    });
 });
 
 router.patch('/', auth, async (req, res) => {
@@ -116,7 +120,7 @@ router.patch('/', auth, async (req, res) => {
 
 
 
-router.delete('/', auth, async (req, res) => {
+router.delete('/', [auth, admin], async (req, res) => {
     try {
         const user = await User.findByIdAndDelete(req.user._id);
 

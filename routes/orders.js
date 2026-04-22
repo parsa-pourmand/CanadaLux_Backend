@@ -62,7 +62,7 @@ router.post('/', auth, async (req, res) => {
       if (req.body.redeemAllPoints && user.points >= 100) {
         redeemedPoints = Math.floor(user.points / 100) * 100;
       }
-      
+
       const orderNumber = await generateDocumentNumber({
         type: 'order',
         prefix: 'ORD',
@@ -75,19 +75,13 @@ router.post('/', auth, async (req, res) => {
         session,
       });
 
-      // 1) Check stock first
+      // 1) Check existance first
       for (const lineItem of req.body.lineItems) {
         const item = await Item.findById(lineItem.itemId).session(session);
 
         if (!item) {
           const e = new Error('One or more items were not found.');
           e.statusCode = 404;
-          throw e;
-        }
-
-        if (item.stockQuantity < lineItem.quantity) {
-          const e = new Error(`Not enough stock for item "${item.name}". Available: ${item.stockQuantity}, requested: ${lineItem.quantity}.`);
-          e.statusCode = 400;
           throw e;
         }
       }
@@ -108,11 +102,25 @@ router.post('/', auth, async (req, res) => {
 
       // 3) Reduce stock
       for (const lineItem of order.lineItems) {
-        await Item.findByIdAndUpdate(
-          lineItem.itemId,
-          { $inc: { stockQuantity: -lineItem.quantity } },
-          { session }
+        const updatedItem = await Item.findOneAndUpdate(
+          {
+            _id: lineItem.itemId,
+            stockQuantity: { $gte: lineItem.quantity }
+          },
+          {
+            $inc: { stockQuantity: -lineItem.quantity }
+          },
+          {
+            session,
+            new: true
+          }
         );
+
+        if (!updatedItem) {
+          const e = new Error('Not enough stock to complete the order. Please try again.');
+          e.statusCode = 400;
+          throw e;
+        }
       }
 
       // 4) Add user points
@@ -232,11 +240,25 @@ router.patch('/:id', auth, async (req, res) => {
 
         // Deduct new stock
         for (const newItem of order.lineItems) {
-          await Item.findByIdAndUpdate(
-            newItem.itemId,
-            { $inc: { stockQuantity: -newItem.quantity } },
-            { session }
+          const updatedItem = await Item.findOneAndUpdate(
+            {
+              _id: newItem.itemId,
+              stockQuantity: { $gte: newItem.quantity }
+            },
+            {
+              $inc: { stockQuantity: -newItem.quantity }
+            },
+            {
+              session,
+              new: true
+            }
           );
+
+          if (!updatedItem) {
+            const e = new Error(`Not enough stock for the updated order.`);
+            e.statusCode = 400;
+            throw e;
+          }
         }
 
         // Sync invoice

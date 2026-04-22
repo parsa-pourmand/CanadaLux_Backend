@@ -1,5 +1,6 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const Joi = require('joi');
 const auth = require('../middleware/auth');
 const admin = require('../middleware/admin');
 const { User } = require('../models/User');
@@ -19,6 +20,25 @@ router.patch('/users/:id/discount', [auth, admin], async (req, res) => {
   const user = await User.findByIdAndUpdate(
     req.params.id,
     { $set: { discount } },
+    { new: true, runValidators: true }
+  );
+
+  if (!user) return res.status(404).send('User not found.');
+
+  res.send(user);
+});
+
+router.patch('/users/:id/role', [auth, admin], async (req, res) => {
+  const schema = Joi.object({
+    role: Joi.string().valid('user', 'admin').required()
+  });
+
+  const { error } = schema.validate(req.body);
+  if (error) return res.status(400).send(error.details[0].message);
+
+  const user = await User.findByIdAndUpdate(
+    req.params.id,
+    { $set: { role: req.body.role } },
     { new: true, runValidators: true }
   );
 

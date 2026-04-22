@@ -1,6 +1,7 @@
 const express = require('express');
 const { Item, validate, validatePatch } = require('../models/Item');
 const auth = require('../middleware/auth');
+const admin = require('../middleware/admin');
 
 const router = express.Router();
 
@@ -27,7 +28,7 @@ router.get('/:id', auth, async (req, res) => {
 });
 
 // Create item
-router.post('/', auth, async (req, res) => {
+router.post('/', [auth, admin], async (req, res) => {
     const { error } = validate(req.body);
     if (error) return res.status(400).send(error.details[0].message);
 
@@ -54,7 +55,7 @@ router.post('/', auth, async (req, res) => {
     }
 });
 // Update item 
-router.patch('/:id', auth, async (req, res) => {
+router.patch('/:id', [auth, admin], async (req, res) => {
     try {
         const existingItem = await Item.findById(req.params.id);
         if (!existingItem) return res.status(404).send('Item not found.');
@@ -92,7 +93,7 @@ router.patch('/:id', auth, async (req, res) => {
 });
 
 // Delete item
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', [auth, admin], async (req, res) => {
     try {
         const item = await Item.findByIdAndDelete(req.params.id);
 

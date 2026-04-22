@@ -3,12 +3,13 @@ const express = require('express')
 const Joi = require('joi')
 const _ = require('lodash')
 const bcrypt = require('bcrypt')
+const { authLimiter } = require('../middleware/rateLimiter');
 
 const {User} = require('../models/User')
 
 const router = express.Router()
 
-router.post('/', async (req,res) =>{
+router.post('/', authLimiter, async (req,res) =>{
     const {error} = validate(req.body)
     if(error) return res.status(400).send(error.details[0].message)
 
@@ -19,7 +20,22 @@ router.post('/', async (req,res) =>{
     if(!validPassword) return res.status(400).send('Invalid email or password.')
 
     const token = user.generateAuthToken()
-    res.send(token)
+    res.send({
+        token,
+        user: {
+            _id: user._id,
+            Firstname: user.Firstname,
+            Lastname: user.Lastname,
+            email: user.email,
+            role: user.role,
+            points: user.points,
+            discount: user.discount,
+            companyName: user.companyName,
+            phoneNumber: user.phoneNumber,
+            billingAddress: user.billingAddress,
+            shippingAddress: user.shippingAddress,
+        }
+    });
 })
 
 
