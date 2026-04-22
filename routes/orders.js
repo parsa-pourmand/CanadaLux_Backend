@@ -41,21 +41,6 @@ router.get('/:id', auth, async (req, res) => {
 router.post('/', auth, async (req, res) => {
   const session = await mongoose.startSession();
 
-  const user = await User.findById(req.user._id).session(session);
-  if (!user) {
-    const e = new Error('User not found.');
-    e.statusCode = 404;
-    throw e;
-  }
-
-  let redeemedPoints = 0;
-
-  if (req.body.redeemAllPoints) {
-    if (user.points >= 100) {
-      redeemedPoints = Math.floor(user.points / 100) * 100;
-    }
-  }
-
   try {
     const { error } = validateOrder({ ...req.body, userId: req.user._id });
     if (error) return res.status(400).send(error.details[0].message || error.details[0].context?.custom);
@@ -64,6 +49,20 @@ router.post('/', auth, async (req, res) => {
     let createdInvoice;
 
     await session.withTransaction(async () => {
+
+      const user = await User.findById(req.user._id).session(session);
+      if (!user) {
+        const e = new Error('User not found.');
+        e.statusCode = 404;
+        throw e;
+      }
+
+      let redeemedPoints = 0;
+
+      if (req.body.redeemAllPoints && user.points >= 100) {
+        redeemedPoints = Math.floor(user.points / 100) * 100;
+      }
+      
       const orderNumber = await generateDocumentNumber({
         type: 'order',
         prefix: 'ORD',

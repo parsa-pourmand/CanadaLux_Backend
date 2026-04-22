@@ -1,4 +1,1 @@
-{
-    "jwtPrivateKey": "mysecretkey123",
-    "db":"mongodb://localhost/canadalux"
-}
+{}

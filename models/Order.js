@@ -91,8 +91,12 @@ orderSchema.index({ userId: 1, orderNumber: 1 }, { unique: true });
 orderSchema.pre('validate', async function () {
   const User = mongoose.model('User');
   const Item = mongoose.model('Item');
+  const session = this.$session();
 
-  const user = await User.findById(this.userId).select('discount');
+  const user = await User.findById(this.userId)
+  .select('discount')
+  .session(session);
+
   const userDiscountPercent = Number(user?.discount || 0);
 
   let subtotalBeforeAnyDiscount = 0;
@@ -100,7 +104,7 @@ orderSchema.pre('validate', async function () {
   let profitBeforeUserDiscount = 0;
 
   for (const lineItem of this.lineItems || []) {
-    const item = await Item.findById(lineItem.itemId);
+    const item = await Item.findById(lineItem.itemId).session(session);
     if (!item) throw new Error('Item not found.');
 
     const quantity = Number(lineItem.quantity || 0);
