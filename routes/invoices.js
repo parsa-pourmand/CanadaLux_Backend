@@ -2,6 +2,7 @@ const express = require("express");
 const { Invoice, validate, validateUpdate } = require("../models/Invoice");
 const auth = require("../middleware/auth");
 const { Payment } = require("../models/Payment");
+const { Project } = require('../models/Project');
 const hasInvoicePaymentActivity = require('../utils/hasInvoicePaymentActivity');
 
 const router = express.Router();
@@ -22,6 +23,13 @@ router.post("/", auth, async (req, res) => {
   try {
     const { error } = validate({ ...req.body, userId: req.user._id }); // ensure validation passes
     if (error) return res.status(400).send(error.details[0].message || error.details[0].context.custom);
+
+    const project = await Project.findOne({
+      _id: req.body.project,
+      userId: req.user._id
+    });
+
+    if (!project) return res.status(404).send('Project not found.');
 
     const invoice = new Invoice({
       userId: req.user._id,

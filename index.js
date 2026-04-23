@@ -1,6 +1,7 @@
 require('dotenv').config();
 
 const express = require('express');
+
 const users = require('./routes/users');
 const admin = require('./routes/admin');
 const auth = require('./routes/auth');
@@ -8,6 +9,8 @@ const invoices = require('./routes/invoices');
 const payment = require('./routes/payments');
 const orders = require('./routes/orders');
 const item = require('./routes/items');
+const projects = require('./routes/projects');
+
 const mongoose = require('mongoose');
 const winston = require('winston');
 const c = require('config');
@@ -51,6 +54,7 @@ app.use('/api/invoices', invoices)
 app.use('/api/payments', payment)
 app.use('/api/orders', orders)
 app.use('/api/items', item);
+app.use('/api/projects', projects);
 
 if (!process.env.JWT_PRIVATE_KEY) {
   winston.error('FATAL ERROR: JWT_PRIVATE_KEY is not defined.');

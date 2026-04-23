@@ -4,6 +4,7 @@ const auth = require('../middleware/auth');
 const { Order, validateOrder, validateOrderPatch } = require('../models/Order');
 const { Invoice } = require('../models/Invoice');
 const { Payment } = require('../models/Payment');
+const { Project } = require('../models/Project');
 const hasInvoicePaymentActivity = require('../utils/hasInvoicePaymentActivity');
 const generateDocumentNumber = require('../utils/generator');
 const { Item } = require('../models/Item');
@@ -75,6 +76,16 @@ router.post('/', auth, async (req, res) => {
         session,
       });
 
+      const project = await Project.findOne({
+        _id: req.body.project,
+        userId: req.user._id
+      }).session(session);
+
+      if (!project) {
+        const e = new Error('Project not found.');
+        e.statusCode = 404;
+        throw e;
+      }
       // 1) Check existance first
       for (const lineItem of req.body.lineItems) {
         const item = await Item.findById(lineItem.itemId).session(session);
