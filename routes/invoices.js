@@ -1,6 +1,9 @@
 const express = require("express");
-const { Invoice, validate, validateUpdate } = require("../models/Invoice");
+
 const auth = require("../middleware/auth");
+const validateObjectId = require('../middleware/validateObjectId');
+
+const { Invoice, validate, validateUpdate } = require("../models/Invoice");
 const { Payment } = require("../models/Payment");
 const { Project } = require('../models/Project');
 const hasInvoicePaymentActivity = require('../utils/hasInvoicePaymentActivity');
@@ -8,7 +11,7 @@ const hasInvoicePaymentActivity = require('../utils/hasInvoicePaymentActivity');
 const router = express.Router();
 
 // Get all invoices for the authenticated user
-router.get("/", auth, async (req, res) => {
+router.get("/", auth, async (req, res, next) => {
   try {
     const invoices = await Invoice.find({ userId: req.user._id }).sort("-dateIssued");
     res.send(invoices);
@@ -18,7 +21,7 @@ router.get("/", auth, async (req, res) => {
 });
 
 // Create a new invoice
-router.post("/", auth, async (req, res) => {
+router.post("/", auth, async (req, res, next) => {
 
   try {
     const { error } = validate({ ...req.body, userId: req.user._id }); // ensure validation passes
@@ -53,7 +56,7 @@ router.post("/", auth, async (req, res) => {
 });
 
 // Get a specific invoice by ID
-router.get("/:id", auth, async (req, res) => {
+router.get("/:id", [auth, validateObjectId], async (req, res, next) => {
   try {
     const invoice = await Invoice.findOne({ _id: req.params.id, userId: req.user._id });
     if (!invoice) return res.status(404).send("Invoice not found.");
@@ -65,7 +68,7 @@ router.get("/:id", auth, async (req, res) => {
 
 
 // Update an invoice by ID
-router.patch("/:id", auth, async (req, res) => {
+router.patch("/:id", [auth, validateObjectId], async (req, res, next) => {
   try {
     const { error } = validateUpdate(req.body);
     if (error) return res.status(400).send(error.details[0].message || error.details[0].context?.custom);
@@ -99,7 +102,7 @@ router.patch("/:id", auth, async (req, res) => {
 });
 
 // Delete an invoice by ID
-router.delete("/:id", auth, async (req, res) => {
+router.delete("/:id", [auth, validateObjectId], async (req, res, next) => {
   try {
     const invoice = await Invoice.findOne({ _id: req.params.id, userId: req.user._id });
     if (!invoice) return res.status(404).send("Invoice not found.");

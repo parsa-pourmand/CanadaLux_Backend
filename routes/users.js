@@ -8,13 +8,13 @@ const { registerLimiter } = require('../middleware/rateLimiter');
 
 const router = express.Router();
 
-router.get('/', auth, async (req, res) => {
+router.get('/', auth, async (req, res, next) => {
     const user = await User.findById(req.user._id).select('-password');
     if (!user) return res.status(404).send('User not found.');
     res.send(user);
 });
 
-router.post('/', registerLimiter, async (req, res) => {
+router.post('/', registerLimiter, async (req, res, next) => {
     const { error } = validate(req.body);
     if (error) return res.status(400).send(error.details[0].message);
 
@@ -58,7 +58,7 @@ router.post('/', registerLimiter, async (req, res) => {
     });
 });
 
-router.patch('/', auth, async (req, res) => {
+router.patch('/', auth, async (req, res, next) => {
     try {
         const { error } = validatePatch(req.body);
         if (error) return res.status(400).send(error.details[0].message);
@@ -120,7 +120,7 @@ router.patch('/', auth, async (req, res) => {
 
 
 
-router.delete('/', [auth, admin], async (req, res) => {
+router.delete('/', [auth, admin], async (req, res, next) => {
     try {
         const user = await User.findByIdAndDelete(req.user._id);
 

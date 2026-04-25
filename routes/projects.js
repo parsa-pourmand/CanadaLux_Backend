@@ -1,5 +1,7 @@
 const express = require('express');
 const auth = require('../middleware/auth');
+const validateObjectId = require('../middleware/validateObjectId');
+
 const { Project, validateProject, validateProjectPatch } = require('../models/Project');
 const { Order } = require('../models/Order');
 const { Invoice } = require('../models/Invoice');
@@ -7,7 +9,7 @@ const { Invoice } = require('../models/Invoice');
 const router = express.Router();
 
 // Get all projects for authenticated user
-router.get('/', auth, async (req, res) => {
+router.get('/', auth, async (req, res, next) => {
   try {
     const projects = await Project.find({ userId: req.user._id }).sort('name');
     res.send(projects);
@@ -17,7 +19,7 @@ router.get('/', auth, async (req, res) => {
 });
 
 // Get specific project
-router.get('/:id', auth, async (req, res) => {
+router.get('/:id', [auth, validateObjectId], async (req, res, next) => {
   try {
     const project = await Project.findOne({
       _id: req.params.id,
@@ -33,7 +35,7 @@ router.get('/:id', auth, async (req, res) => {
 });
 
 // Create project
-router.post('/', auth, async (req, res) => {
+router.post('/', auth, async (req, res, next) => {
   try {
     const { error } = validateProject({
       ...req.body,
@@ -60,7 +62,7 @@ router.post('/', auth, async (req, res) => {
 });
 
 // Update project
-router.patch('/:id', auth, async (req, res) => {
+router.patch('/:id', [auth, validateObjectId], async (req, res, next) => {
   try {
     const { error } = validateProjectPatch(req.body);
 
@@ -88,7 +90,7 @@ router.patch('/:id', auth, async (req, res) => {
 });
 
 // Delete project
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', [auth, validateObjectId], async (req, res, next) => {
   try {
     const project = await Project.findOne({
       _id: req.params.id,

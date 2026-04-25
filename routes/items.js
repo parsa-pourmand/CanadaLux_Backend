@@ -1,12 +1,14 @@
 const express = require('express');
 const { Item, validate, validatePatch } = require('../models/Item');
+
+const validateObjectId = require('../middleware/validateObjectId');
 const auth = require('../middleware/auth');
 const admin = require('../middleware/admin');
 
 const router = express.Router();
 
 // Get all items
-router.get('/', auth, async (req, res) => {
+router.get('/', auth, async (req, res, next) => {
     try {
         const items = await Item.find().sort('name');
         res.send(items);
@@ -16,7 +18,7 @@ router.get('/', auth, async (req, res) => {
 });
 
 // Get item by ID
-router.get('/:id', auth, async (req, res) => {
+router.get('/:id', [auth, validateObjectId], async (req, res, next) => {
     try {
         const item = await Item.findById(req.params.id);
         if (!item) return res.status(404).send('Item not found.');
@@ -28,7 +30,7 @@ router.get('/:id', auth, async (req, res) => {
 });
 
 // Create item
-router.post('/', [auth, admin], async (req, res) => {
+router.post('/', [auth, admin], async (req, res, next) => {
     const { error } = validate(req.body);
     if (error) return res.status(400).send(error.details[0].message);
 
@@ -52,7 +54,7 @@ router.post('/', [auth, admin], async (req, res) => {
     }
 });
 // Update item 
-router.patch('/:id', [auth, admin], async (req, res) => {
+router.patch('/:id', [auth, admin, validateObjectId], async (req, res, next) => {
     try {
         const existingItem = await Item.findById(req.params.id);
         if (!existingItem) return res.status(404).send('Item not found.');
@@ -87,7 +89,7 @@ router.patch('/:id', [auth, admin], async (req, res) => {
 });
 
 // Delete item
-router.delete('/:id', [auth, admin], async (req, res) => {
+router.delete('/:id', [auth, admin, validateObjectId], async (req, res, next) => {
     try {
         const item = await Item.findByIdAndDelete(req.params.id);
 

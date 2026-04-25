@@ -1,14 +1,19 @@
 const express = require('express');
 const mongoose = require('mongoose');
+
 const auth = require('../middleware/auth');
+const validateObjectId = require('../middleware/validateObjectId');
+
 const { Order, validateOrder, validateOrderPatch } = require('../models/Order');
 const { Invoice } = require('../models/Invoice');
 const { Payment } = require('../models/Payment');
 const { Project } = require('../models/Project');
-const hasInvoicePaymentActivity = require('../utils/hasInvoicePaymentActivity');
-const generateDocumentNumber = require('../utils/generator');
 const { Item } = require('../models/Item');
 const { User } = require('../models/User');
+
+const hasInvoicePaymentActivity = require('../utils/hasInvoicePaymentActivity');
+const generateDocumentNumber = require('../utils/generator');
+
 
 
 const router = express.Router();
@@ -20,7 +25,7 @@ function addDays(date, days) {
 }
 
 // Get all orders for the authenticated user
-router.get('/', auth, async (req, res) => {
+router.get('/', auth, async (req, res, next) => {
   try {
     const orders = await Order.find({ userId: req.user._id }).sort('-orderedDate');
     res.send(orders);
@@ -29,7 +34,7 @@ router.get('/', auth, async (req, res) => {
   }
 });
 // Get a specific order by ID
-router.get('/:id', auth, async (req, res) => {
+router.get('/:id', [auth, validateObjectId], async (req, res, next) => {
   try {
     const order = await Order.findOne({ _id: req.params.id, userId: req.user._id });
     if (!order) return res.status(404).send('Order not found.');
@@ -39,7 +44,7 @@ router.get('/:id', auth, async (req, res) => {
   }
 });
 
-router.post('/', auth, async (req, res) => {
+router.post('/', auth, async (req, res, next) => {
   const session = await mongoose.startSession();
 
   try {
@@ -168,7 +173,7 @@ router.post('/', auth, async (req, res) => {
   }
 });
 
-router.patch('/:id', auth, async (req, res) => {
+router.patch('/:id', [auth, validateObjectId], async (req, res, next) => {
   const session = await mongoose.startSession();
 
   try {
@@ -308,7 +313,7 @@ router.patch('/:id', auth, async (req, res) => {
 // Delete an order by ID
 // Rule: if invoice has ANY payment activity -> block delete
 // If no payment activity -> delete BOTH invoice + order in a transaction
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', [auth, validateObjectId], async (req, res, next) => {
   const session = await mongoose.startSession();
 
   try {

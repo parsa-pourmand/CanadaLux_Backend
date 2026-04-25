@@ -3,13 +3,15 @@ const mongoose = require('mongoose');
 const { Payment, validatePayment, validatePaymentPatch } = require('../models/Payment');
 const { PaymentAllocation } = require('../models/PaymentAllocation');
 const { Invoice } = require('../models/Invoice');
+
+const validateObjectId = require('../middleware/validateObjectId');
 const auth = require('../middleware/auth');
 const generateDocumentNumber = require('../utils/generator');
 
 const router = express.Router();
 
 // Get all payments for the authenticated user
-router.get('/', auth, async (req, res) => {
+router.get('/', auth, async (req, res, next) => {
   try {
     const payments = await Payment.find({ userId: req.user._id }).sort('-date');
     res.send(payments);
@@ -19,7 +21,7 @@ router.get('/', auth, async (req, res) => {
 });
 
 // Get a specific payment by ID, with allocations
-router.get('/:id', auth, async (req, res) => {
+router.get('/:id', [auth, validateObjectId], async (req, res, next) => {
   try {
     const payment = await Payment.findOne({ _id: req.params.id, userId: req.user._id });
     if (!payment) return res.status(404).send('Payment not found.');
@@ -35,7 +37,7 @@ router.get('/:id', auth, async (req, res) => {
   }
 });
 
-router.get('/credit-summary', auth, async (req, res) => {
+router.get('/credit-summary', auth, async (req, res, next) => {
   try {
     const payments = await Payment.find({
       userId: req.user._id,
@@ -62,7 +64,7 @@ router.get('/credit-summary', auth, async (req, res) => {
 });
 
 // Create a new payment and auto-apply it to oldest unpaid invoices first
-router.post('/', auth, async (req, res) => {
+router.post('/', auth, async (req, res, next) => {
   const session = await mongoose.startSession();
 
   try {
@@ -153,7 +155,7 @@ router.post('/', auth, async (req, res) => {
 
 // Update a payment by ID
 // Keep this intentionally limited: metadata only
-router.patch('/:id', auth, async (req, res) => {
+router.patch('/:id', [auth, validateObjectId], async (req, res, next) => {
   try {
     const { error } = validatePaymentPatch(req.body);
     if (error) {
@@ -176,7 +178,7 @@ router.patch('/:id', auth, async (req, res) => {
 });
 
 // Delete a payment by ID and restore all affected invoice balances
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', [auth, validateObjectId], async (req, res, next) => {
   const session = await mongoose.startSession();
 
   try {

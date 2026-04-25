@@ -1,8 +1,11 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const Joi = require('joi');
+
 const auth = require('../middleware/auth');
 const admin = require('../middleware/admin');
+const validateObjectId = require('../middleware/validateObjectId');
+
 const { User } = require('../models/User');
 const { Invoice } = require('../models/Invoice');
 const { Payment } = require('../models/Payment');
@@ -10,7 +13,7 @@ const { PaymentAllocation } = require('../models/PaymentAllocation');
 
 const router = express.Router();
 
-router.patch('/users/:id/discount', [auth, admin], async (req, res) => {
+router.patch('/users/:id/discount', [auth, admin, validateObjectId], async (req, res) => {
   const discount = Number(req.body.discount);
 
   if (Number.isNaN(discount) || discount < 0 || discount > 100) {
@@ -28,7 +31,7 @@ router.patch('/users/:id/discount', [auth, admin], async (req, res) => {
   res.send(user);
 });
 
-router.patch('/users/:id/role', [auth, admin], async (req, res) => {
+router.patch('/users/:id/role', [auth, admin, validateObjectId], async (req, res) => {
   const schema = Joi.object({
     role: Joi.string().valid('user', 'admin').required()
   });
@@ -47,7 +50,7 @@ router.patch('/users/:id/role', [auth, admin], async (req, res) => {
   res.send(user);
 });
 
-router.post('/invoices/:id/apply-credit', [auth, admin], async (req, res) => {
+router.post('/invoices/:id/apply-credit', [auth, admin, validateObjectId], async (req, res, next) => {
   const session = await mongoose.startSession();
 
   try {
@@ -136,7 +139,7 @@ router.post('/invoices/:id/apply-credit', [auth, admin], async (req, res) => {
   }
 });
 
-router.get('/users/:id/credit-summary', [auth, admin], async (req, res) => {
+router.get('/users/:id/credit-summary', [auth, admin, validateObjectId], async (req, res, next) => {
   try {
     const payments = await Payment.find({
       userId: req.params.id,
