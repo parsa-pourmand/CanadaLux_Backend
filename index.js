@@ -1,82 +1,64 @@
 require('dotenv').config();
 
 const express = require('express');
-
-const error = require('./middleware/error');
-const users = require('./routes/users');
-const admin = require('./routes/admin');
-const auth = require('./routes/auth');
-const invoices = require('./routes/invoices');
-const payment = require('./routes/payments');
-const orders = require('./routes/orders');
-const item = require('./routes/items');
-const projects = require('./routes/projects');
-
-const mongoose = require('mongoose');
 const winston = require('winston');
-const c = require('config');
-const helmet = require('helmet');
-const cors = require('cors');
-
-
-// Configure Winston
-winston.add(new winston.transports.Console({
-  format: winston.format.simple()
-}));
+const morgan = require('morgan');
 
 const app = express();
-
-app.disable('x-powered-by');
-app.use(helmet());
-
 const port = process.env.PORT || 3000;
 
-const allowedOrigins = [
-  'http://localhost:3000',
-  'http://localhost:3001',
-  process.env.FRONTEND_URL
-].filter(Boolean);
+// Startup modules
+require('./startup/logging')();
+require('./startup/db')();
+require('./startup/security')(app);
+require('./startup/routes')(app);
 
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error('Not allowed by CORS'));
-  }
-}));
+// Logging (after routes setup)
+app.use(
+  morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev', {
+    stream: {
+      write: (message) => winston.info(message.trim())
+    }
+  })
+);
 
-app.use(express.json({ limit: '100kb' }));
-app.use(express.urlencoded({ extended: true, limit: '100kb' }));
-
-app.use('/api/users', users)
-app.use('/api/admin', admin);
-app.use('/api/auth', auth)
-app.use('/api/invoices', invoices)
-app.use('/api/payments', payment)
-app.use('/api/orders', orders)
-app.use('/api/items', item);
-app.use('/api/projects', projects);
-
-app.use(error);
-
+// JWT check
 if (!process.env.JWT_PRIVATE_KEY) {
   winston.error('FATAL ERROR: JWT_PRIVATE_KEY is not defined.');
   process.exit(1);
 }
 
-if (!process.env.MONGO_URI) {
-  winston.error('FATAL ERROR: MONGO_URI is not defined.');
-  process.exit(1);
-}
+// Start server
+const server = app.listen(port, () => {
+  winston.info(`Listening on port ${port}...`);
+});
 
-const db = process.env.MONGO_URI
-mongoose.connect(db)
-    .then(()=>{
-        winston.info(`Connected to ${db}...`)
-    })
-    .catch(err=>winston.error('Could not connect to MongoDB...', err));
+// Graceful shutdown
+const mongoose = require('mongoose');
 
+const shutdown = async (signal) => {
+  winston.info(`${signal} received. Shutting down gracefully...`);
 
-const server = app.listen(port, () => winston.info(`Listening on port ${port}...`));
+  server.close(async () => {
+    winston.info('HTTP server closed.');
+
+    try {
+      await mongoose.connection.close();
+      winston.info('MongoDB connection closed.');
+      process.exit(0);
+    } catch (err) {
+      winston.error('Error closing MongoDB connection:', err);
+      process.exit(1);
+    }
+  });
+
+  setTimeout(() => {
+    winston.error('Force shutdown.');
+    process.exit(1);
+  }, 10000);
+};
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
 
 module.exports = server;

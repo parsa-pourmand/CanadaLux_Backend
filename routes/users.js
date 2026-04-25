@@ -122,11 +122,17 @@ router.patch('/', auth, async (req, res, next) => {
 
 router.delete('/', [auth, admin], async (req, res, next) => {
     try {
-        const user = await User.findByIdAndDelete(req.user._id);
+        const user = await User.findById(req.user._id);
 
         if (!user) return res.status(404).send('User not found.');
 
-        res.send('User deleted successfully.');
+        user.isDeleted = true;
+        user.deletedAt = new Date();
+        user.email = `deleted_${user._id}_${user.email}`;
+
+        await user.save();
+
+        res.send('Account deleted.');
     } catch (err) {
         next(err);
     }
