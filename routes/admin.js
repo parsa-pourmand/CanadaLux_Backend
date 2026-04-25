@@ -130,11 +130,38 @@ router.post('/invoices/:id/apply-credit', [auth, admin], async (req, res) => {
       allocations: allocationsCreated,
     });
   } catch (err) {
-    if (err.statusCode) return res.status(err.statusCode).send(err.message);
-    res.status(500).send(err.message);
+      next(err);
   } finally {
     session.endSession();
   }
 });
 
+router.get('/users/:id/credit-summary', [auth, admin], async (req, res) => {
+  try {
+    const payments = await Payment.find({
+      userId: req.params.id,
+      unappliedAmount: { $gt: 0 }
+    }).sort({ date: 1, _id: 1 });
+
+    const totalCredit = payments.reduce(
+      (sum, p) => sum + Number(p.unappliedAmount || 0),
+      0
+    );
+
+    res.send({
+      userId: req.params.id,
+      totalCredit: Number(totalCredit.toFixed(2)),
+      credits: payments.map(p => ({
+        paymentId: p._id,
+        paymentNumber: p.paymentNumber,
+        date: p.date,
+        method: p.method,
+        amount: p.amount,
+        unappliedAmount: p.unappliedAmount
+      }))
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 module.exports = router;

@@ -114,7 +114,7 @@ router.patch('/', auth, async (req, res) => {
         res.send(updatedUser);
 
     } catch (err) {
-        res.status(500).send(err.message);
+        next(err);
     }
 });
 
@@ -128,7 +128,7 @@ router.delete('/', [auth, admin], async (req, res) => {
 
         res.send('User deleted successfully.');
     } catch (err) {
-        res.status(500).send(err.message);
+        next(err);
     }
 });
 

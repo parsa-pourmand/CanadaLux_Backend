@@ -12,7 +12,7 @@ router.get('/', auth, async (req, res) => {
     const projects = await Project.find({ userId: req.user._id }).sort('name');
     res.send(projects);
   } catch (err) {
-    res.status(500).send(err.message);
+    next(err);
   }
 });
 
@@ -28,7 +28,7 @@ router.get('/:id', auth, async (req, res) => {
 
     res.send(project);
   } catch (err) {
-    res.status(400).send('Invalid project id.');
+    next(err);
   }
 });
 
@@ -55,11 +55,7 @@ router.post('/', auth, async (req, res) => {
 
     res.status(201).send(project);
   } catch (err) {
-    if (err.code === 11000) {
-      return res.status(409).send('A project with this name already exists.');
-    }
-
-    res.status(500).send(err.message);
+    next(err);
   }
 });
 
@@ -87,11 +83,7 @@ router.patch('/:id', auth, async (req, res) => {
 
     res.send(project);
   } catch (err) {
-    if (err.code === 11000) {
-      return res.status(409).send('A project with this name already exists.');
-    }
-
-    res.status(400).send(err.message);
+    next(err);
   }
 });
 
@@ -125,7 +117,7 @@ router.delete('/:id', auth, async (req, res) => {
 
     res.send(project);
   } catch (err) {
-    res.status(400).send('Invalid project id.');
+    next(err);
   }
 });
 

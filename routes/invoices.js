@@ -13,7 +13,7 @@ router.get("/", auth, async (req, res) => {
     const invoices = await Invoice.find({ userId: req.user._id }).sort("-dateIssued");
     res.send(invoices);
   } catch (err) {
-    res.status(500).send(err.message);
+    next(err);
   }
 });
 
@@ -48,11 +48,7 @@ router.post("/", auth, async (req, res) => {
     res.status(201).send(invoice);
 
   } catch (err) {
-  
-    if (err.code === 11000 && err.keyPattern?.invoiceNumber) {
-      return res.status(409).send("Invoice number already exists.");
-    }
-    res.status(500).send(err.message);
+    next(err);
   }
 });
 
@@ -63,7 +59,7 @@ router.get("/:id", auth, async (req, res) => {
     if (!invoice) return res.status(404).send("Invoice not found.");
     res.send(invoice);
   } catch (err) {
-    res.status(400).send("Invalid invoice id.");
+    next(err);
   }
 });
 
@@ -98,10 +94,7 @@ router.patch("/:id", auth, async (req, res) => {
     await invoice.save(); // runs validators
     res.send(invoice);
   } catch (err) {
-    if (err.code === 11000 && err.keyPattern?.invoiceNumber) {
-      return res.status(409).send("Invoice number already exists.");
-    }
-    res.status(400).send(err.message);
+    next(err);
   }
 });
 
@@ -123,7 +116,7 @@ router.delete("/:id", auth, async (req, res) => {
     await invoice.deleteOne();
     res.send(invoice);
   } catch (err) {
-    res.status(400).send("Invalid invoice id.");
+    next(err);
   }
 });
 

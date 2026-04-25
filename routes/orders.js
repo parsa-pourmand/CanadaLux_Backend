@@ -25,7 +25,7 @@ router.get('/', auth, async (req, res) => {
     const orders = await Order.find({ userId: req.user._id }).sort('-orderedDate');
     res.send(orders);
   } catch (err) {
-    res.status(500).send(err.message);
+    next(err);
   }
 });
 // Get a specific order by ID
@@ -35,7 +35,7 @@ router.get('/:id', auth, async (req, res) => {
     if (!order) return res.status(404).send('Order not found.');
     res.send(order);
   } catch (err) {
-    res.status(400).send('Invalid order id.');
+    next(err);
   }
 });
 
@@ -162,11 +162,7 @@ router.post('/', auth, async (req, res) => {
 
     res.status(201).send({ order: createdOrder, invoice: createdInvoice });
   } catch (err) {
-    if (err.statusCode) return res.status(err.statusCode).send(err.message);
-    if (err.code === 11000) {
-      return res.status(409).send('Duplicate order number or invoice number.');
-    }
-    res.status(500).send(err.message);
+    next(err);
   } finally {
     session.endSession();
   }
@@ -303,11 +299,7 @@ router.patch('/:id', auth, async (req, res) => {
 
     res.send(updatedOrder);
   } catch (err) {
-    if (err.statusCode) return res.status(err.statusCode).send(err.message);
-    if (err.code === 11000) {
-      return res.status(409).send('Order number already exists for this user.');
-    }
-    res.status(500).send(err.message);
+    next(err);
   } finally {
     session.endSession();
   }
@@ -370,8 +362,7 @@ router.delete('/:id', auth, async (req, res) => {
 
     res.send({ order: deletedOrder, invoice: deletedInvoice || null });
   } catch (err) {
-    if (err.statusCode) return res.status(err.statusCode).send(err.message);
-    res.status(500).send(err.message);
+    next(err);
   } finally {
     session.endSession();
   }

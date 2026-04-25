@@ -11,7 +11,7 @@ router.get('/', auth, async (req, res) => {
         const items = await Item.find().sort('name');
         res.send(items);
     } catch (err) {
-        res.status(500).send(err.message);
+        next(err);
     }
 });
 
@@ -23,7 +23,7 @@ router.get('/:id', auth, async (req, res) => {
 
         res.send(item);
     } catch (err) {
-        res.status(400).send('Invalid item id.');
+        next(err);
     }
 });
 
@@ -48,10 +48,7 @@ router.post('/', [auth, admin], async (req, res) => {
         item = await item.save();
         res.send(item);
     } catch (err) {
-        if (err.code === 11000)
-            return res.status(409).send('SKU already exists.');
-
-        res.status(500).send(err.message);
+        next(err);
     }
 });
 // Update item 
@@ -85,10 +82,7 @@ router.patch('/:id', [auth, admin], async (req, res) => {
 
         res.send(item);
     } catch (err) {
-        if (err.code === 11000)
-            return res.status(409).send('SKU already exists.');
-
-        res.status(400).send('Invalid item id.');
+        next(err);
     }
 });
 
@@ -101,7 +95,7 @@ router.delete('/:id', [auth, admin], async (req, res) => {
 
         res.send(item);
     } catch (err) {
-        res.status(400).send('Invalid item id.');
+        next(err);
     }
 });
 

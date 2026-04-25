@@ -14,7 +14,7 @@ router.get('/', auth, async (req, res) => {
     const payments = await Payment.find({ userId: req.user._id }).sort('-date');
     res.send(payments);
   } catch (err) {
-    res.status(500).send(err.message);
+    next(err);
   }
 });
 
@@ -31,7 +31,33 @@ router.get('/:id', auth, async (req, res) => {
 
     res.send({ payment, allocations });
   } catch (err) {
-    res.status(400).send('Invalid payment id.');
+    next(err);
+  }
+});
+
+router.get('/credit-summary', auth, async (req, res) => {
+  try {
+    const payments = await Payment.find({
+      userId: req.user._id,
+      unappliedAmount: { $gt: 0 }
+    }).sort({ date: 1 });
+
+    const totalCredit = payments.reduce(
+      (sum, p) => sum + Number(p.unappliedAmount || 0),
+      0
+    );
+
+    res.send({
+      totalCredit: Number(totalCredit.toFixed(2)),
+      credits: payments.map(p => ({
+        paymentId: p._id,
+        paymentNumber: p.paymentNumber,
+        date: p.date,
+        unappliedAmount: p.unappliedAmount
+      }))
+    });
+  } catch (err) {
+    next(err);
   }
 });
 
@@ -119,11 +145,7 @@ router.post('/', auth, async (req, res) => {
       allocations: createdAllocations,
     });
   } catch (err) {
-    if (err.statusCode) return res.status(err.statusCode).send(err.message);
-    if (err.code === 11000 && err.keyPattern?.paymentNumber) {
-      return res.status(409).send('Payment number already exists.');
-    }
-    res.status(500).send(err.message);
+    next(err);
   } finally {
     session.endSession();
   }
@@ -149,10 +171,7 @@ router.patch('/:id', auth, async (req, res) => {
 
     res.send(payment);
   } catch (err) {
-    if (err.code === 11000 && err.keyPattern?.paymentNumber) {
-      return res.status(409).send('Payment number already exists.');
-    }
-    res.status(500).send(err.message);
+   next(err);
   }
 });
 
@@ -214,8 +233,7 @@ router.delete('/:id', auth, async (req, res) => {
       allocations: deletedAllocations,
     });
   } catch (err) {
-    if (err.statusCode) return res.status(err.statusCode).send(err.message);
-    res.status(500).send(err.message);
+    next(err);
   } finally {
     session.endSession();
   }

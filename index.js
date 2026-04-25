@@ -2,6 +2,7 @@ require('dotenv').config();
 
 const express = require('express');
 
+const error = require('./middleware/error');
 const users = require('./routes/users');
 const admin = require('./routes/admin');
 const auth = require('./routes/auth');
@@ -55,6 +56,8 @@ app.use('/api/payments', payment)
 app.use('/api/orders', orders)
 app.use('/api/items', item);
 app.use('/api/projects', projects);
+
+app.use(error);
 
 if (!process.env.JWT_PRIVATE_KEY) {
   winston.error('FATAL ERROR: JWT_PRIVATE_KEY is not defined.');
