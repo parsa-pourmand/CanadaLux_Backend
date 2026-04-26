@@ -8,6 +8,14 @@ const { registerLimiter } = require('../middleware/rateLimiter');
 
 const router = express.Router();
 
+router.get('/me', auth, async (req, res) => {
+  const user = await User.findById(req.user._id).select('-password');
+
+  if (!user) return res.status(404).send('User not found.');
+
+  res.send(user);
+});
+
 router.get('/', auth, async (req, res, next) => {
     const user = await User.findById(req.user._id).select('-password');
     if (!user) return res.status(404).send('User not found.');
