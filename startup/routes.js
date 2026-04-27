@@ -8,6 +8,7 @@ const payments = require('../routes/payments');
 const orders = require('../routes/orders');
 const items = require('../routes/items');
 const projects = require('../routes/projects');
+const quotes = require('../routes/quotes');
 
 const error = require('../middleware/error');
 
@@ -31,6 +32,7 @@ module.exports = function (app) {
   app.use('/api/orders', orders);
   app.use('/api/items', items);
   app.use('/api/projects', projects);
+  app.use('/api/quotes', quotes);
 
   app.use(error);
 };
