@@ -15,9 +15,9 @@ const itemSchema = new mongoose.Schema({
         default: '',
         trim: true
     },
-    image: {
-        type: String,
-        default: '',
+    images: {
+        type: [String],
+        default: [],
         trim: true
     },
     sku: {
@@ -81,7 +81,7 @@ function validateItem(item) {
     const schema = Joi.object({
         name: Joi.string().min(2).max(255).required(),
         description: Joi.string().max(1024).allow(''),
-        image: Joi.string().max(2048).allow(''),
+        images: Joi.array().items(Joi.string().max(2048)).default([]),
         sku: Joi.string().max(100).allow(''),
         sellingPrice: Joi.number().min(0).required(),
         purchasingPrice: Joi.number().min(0).required(),
@@ -103,7 +103,7 @@ function validatePatch(item) {
     const schema = Joi.object({
         name: Joi.string().min(2).max(255),
         description: Joi.string().max(1024).allow(''),
-        image: Joi.string().max(2048).allow(''),
+        images: Joi.array().items(Joi.string().max(2048)).default([]),
         sku: Joi.string().max(100).allow(''),
         sellingPrice: Joi.number().min(0),
         purchasingPrice: Joi.number().min(0),

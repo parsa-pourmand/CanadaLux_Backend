@@ -13,7 +13,7 @@ const router = express.Router();
 // Get all invoices for the authenticated user
 router.get("/", auth, async (req, res, next) => {
   try {
-    const invoices = await Invoice.find({ userId: req.user._id }).sort("-dateIssued");
+    const invoices = await Invoice.find({ userId: req.user._id }).populate("orderId", "orderNumber").sort("-dateIssued");
     res.send(invoices);
   } catch (err) {
     next(err);

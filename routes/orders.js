@@ -27,7 +27,9 @@ function addDays(date, days) {
 // Get all orders for the authenticated user
 router.get('/', auth, async (req, res, next) => {
   try {
-    const orders = await Order.find({ userId: req.user._id }).sort('-orderedDate');
+    const orders = await Order.find({ userId: req.user._id })
+      .populate('project', 'name description')
+      .populate('lineItems.itemId', 'name sellingPrice');
     res.send(orders);
   } catch (err) {
     next(err);

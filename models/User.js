@@ -37,6 +37,12 @@ const userSchema = new mongoose.Schema({
         maxlength: 255,
         default: '',
     },
+    profileImage: {
+        type: String,
+        maxlength: 5000,
+        default: '',
+        trim: true
+    },
     phoneNumber: {
         type: String,
         maxlength: 20,
@@ -107,7 +113,7 @@ function validateUser(user) {
         phoneNumber: Joi.string().max(20).allow('').required(),
         billingAddress: Joi.string().max(255).allow('').required(),
         shippingAddress: Joi.string().max(255).allow('').required(),
-        
+        profileImage: Joi.string().max(5000).allow('').optional()
     });
     return schema.validate(user);
 }
@@ -116,10 +122,12 @@ function validateUserPatch(user) {
     const schema = Joi.object({
         email: Joi.string().min(5).max(255).email(),
         password: Joi.string().min(5).max(255),
-        oldPassword: Joi.string().min(5).max(255),
+        currentPassword: Joi.string().min(5).max(255),
         phoneNumber: Joi.string().max(20).allow(''),
         billingAddress: Joi.string().max(255).allow(''),
         shippingAddress: Joi.string().max(255).allow(''),
+        companyName: Joi.string().max(255).allow(''),
+        profileImage: Joi.string().max(5000).allow('').optional()
 
     }).min(1);
 

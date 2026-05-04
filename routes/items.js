@@ -38,7 +38,7 @@ router.post('/', [auth, admin], async (req, res, next) => {
         name: req.body.name,
         description: req.body.description || '',
         sku: req.body.sku || undefined,
-        image: req.body.image || '',
+        images: req.body.images || [],
         sellingPrice: req.body.sellingPrice,
         purchasingPrice: req.body.purchasingPrice,
         stockQuantity: req.body.stockQuantity,
@@ -62,7 +62,7 @@ router.patch('/:id', [auth, admin, validateObjectId], async (req, res, next) => 
         const updatedData = {
             name: req.body.name !== undefined ? req.body.name : existingItem.name,
             description: req.body.description !== undefined ? req.body.description : existingItem.description,
-            image: req.body.image !== undefined ? req.body.image : existingItem.image,
+            images: req.body.images !== undefined ? req.body.images : existingItem.images,
             sku: req.body.sku !== undefined ? req.body.sku : existingItem.sku,
             sellingPrice: req.body.sellingPrice !== undefined ? req.body.sellingPrice : existingItem.sellingPrice,
             purchasingPrice: req.body.purchasingPrice !== undefined ? req.body.purchasingPrice : existingItem.purchasingPrice,
