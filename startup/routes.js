@@ -9,6 +9,7 @@ const orders = require('../routes/orders');
 const items = require('../routes/items');
 const projects = require('../routes/projects');
 const quotes = require('../routes/quotes');
+const featuredProducts = require('../routes/featuredProducts');
 
 const error = require('../middleware/error');
 
@@ -33,6 +34,7 @@ module.exports = function (app) {
   app.use('/api/items', items);
   app.use('/api/projects', projects);
   app.use('/api/quotes', quotes);
+  app.use('/api/featured-products', featuredProducts);
 
   app.use(error);
 };

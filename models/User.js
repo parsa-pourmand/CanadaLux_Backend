@@ -52,14 +52,12 @@ const userSchema = new mongoose.Schema({
     billingAddress: {
         type: String,
         maxlength: 255,
-        default: '',
-        required: true
+        default: ''
     },
     shippingAddress: {
         type: String,
         maxlength: 255,
         default: '',
-        required: true
     },
     points: {
         type: Number,
@@ -111,8 +109,8 @@ function validateUser(user) {
         password: Joi.string().min(5).max(255).required(),
         companyName: Joi.string().max(255).allow('').optional(),
         phoneNumber: Joi.string().max(20).allow('').required(),
-        billingAddress: Joi.string().max(255).allow('').required(),
-        shippingAddress: Joi.string().max(255).allow('').required(),
+        billingAddress: Joi.string().max(255).allow('').optional(),
+        shippingAddress: Joi.string().max(255).allow('').optional(),
         profileImage: Joi.string().max(5000).allow('').optional()
     });
     return schema.validate(user);

@@ -5,6 +5,9 @@ const _ = require('lodash');
 const auth = require('../middleware/auth');
 const admin = require('../middleware/admin');
 const { registerLimiter } = require('../middleware/rateLimiter');
+const { Order } = require('../models/Order');
+const { Quote } = require('../models/Quote');
+const { Invoice } = require('../models/Invoice');
 
 const router = express.Router();
 
@@ -16,11 +19,6 @@ router.get('/me', auth, async (req, res) => {
   res.send(user);
 });
 
-router.get('/', auth, async (req, res, next) => {
-    const user = await User.findById(req.user._id).select('-password');
-    if (!user) return res.status(404).send('User not found.');
-    res.send(user);
-});
 
 router.post('/', registerLimiter, async (req, res, next) => {
     const { error } = validate(req.body);
@@ -65,6 +63,90 @@ router.post('/', registerLimiter, async (req, res, next) => {
             'profileImage'
         ])
     });
+});
+
+// GET all users - admin only
+router.get('/admin/all', [auth, admin], async (req, res, next) => {
+  try {
+    const users = await User.find({ isDeleted: false })
+      .select('-password')
+      .sort({ createdAt: -1 });
+
+    res.send(users);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET one user - admin only
+router.get('/admin/:id', [auth, admin], async (req, res, next) => {
+  try {
+    const user = await User.findById(req.params.id).select('-password');
+
+    if (!user) return res.status(404).send('User not found.');
+
+    res.send(user);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/admin/:id/details', [auth, admin], async (req, res, next) => {
+  try {
+
+    const user = await User.findById(req.params.id).select('-password');
+    if (!user) return res.status(404).send('User not found.');
+
+    const orders = await Order.find({ userId: req.params.id })
+      .populate('project', 'name')
+      .populate('lineItems.itemId', 'name')
+      .sort({ createdAt: -1 });
+
+    const quotes = await Quote.find({ userId: req.params.id })
+      .sort({ createdAt: -1 });
+
+    const invoices = await Invoice.find({ userId: req.params.id });
+
+    const totalOwed = invoices.reduce((sum, invoice) => {
+      if (invoice.status?.toLowerCase() === 'paid') return sum;
+
+      const balance = invoice.balance || 0;
+
+      return sum + Math.max(0, balance);
+    }, 0);
+
+    res.send({
+      user,
+      orders,
+      quotes,
+      totalOwed,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PATCH user discount - admin only
+router.patch('/admin/:id/discount', [auth, admin], async (req, res, next) => {
+  try {
+    const discount = Number(req.body.discount);
+
+    if (Number.isNaN(discount) || discount < 0 || discount > 100) {
+      return res.status(400).send('Discount must be between 0 and 100.');
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { discount },
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    if (!user) return res.status(404).send('User not found.');
+
+    res.send(user);
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.patch('/me/profile', auth, async (req, res, next) => {
