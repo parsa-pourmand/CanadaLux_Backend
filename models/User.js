@@ -86,6 +86,10 @@ const userSchema = new mongoose.Schema({
     deletedAt: {
         type: Date,
     },
+    expoPushTokens: {
+        type: [String],
+        default: [],
+    }
 });
 
 userSchema.methods.generateAuthToken = function() {

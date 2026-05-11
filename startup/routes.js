@@ -10,6 +10,7 @@ const items = require('../routes/items');
 const projects = require('../routes/projects');
 const quotes = require('../routes/quotes');
 const featuredProducts = require('../routes/featuredProducts');
+const notifications = require('../routes/notifications');
 
 const error = require('../middleware/error');
 
@@ -35,6 +36,7 @@ module.exports = function (app) {
   app.use('/api/projects', projects);
   app.use('/api/quotes', quotes);
   app.use('/api/featured-products', featuredProducts);
+  app.use('/api/notifications', notifications);
 
   app.use(error);
 };

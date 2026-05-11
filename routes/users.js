@@ -138,7 +138,7 @@ router.patch('/admin/:id/discount', [auth, admin], async (req, res, next) => {
     const user = await User.findByIdAndUpdate(
       req.params.id,
       { discount },
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     ).select('-password');
 
     if (!user) return res.status(404).send('User not found.');
@@ -205,7 +205,7 @@ router.patch('/me/profile', auth, async (req, res, next) => {
         const updatedUser = await User.findByIdAndUpdate(
             req.user._id,
             { $set: updateFields },
-            { new: true, runValidators: true }
+            { returnDocument: 'after', runValidators: true }
         ).select('-password');
 
         const token = updatedUser.generateAuthToken();
@@ -219,7 +219,27 @@ router.patch('/me/profile', auth, async (req, res, next) => {
     }
 });
 
+router.post('/me/push-token', auth, async (req, res, next) => {
+  try {
+    const { token } = req.body;
 
+    if (!token || typeof token !== 'string') {
+      return res.status(400).send('Push token is required.');
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { $addToSet: { expoPushTokens: token } },
+      { new: true }
+    ).select('-password');
+
+    if (!user) return res.status(404).send('User not found.');
+
+    res.send({ message: 'Push token saved.' });
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.delete('/', [auth, admin], async (req, res, next) => {
     try {

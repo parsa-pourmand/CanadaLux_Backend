@@ -3,6 +3,10 @@ const auth = require('../middleware/auth');
 const admin = require('../middleware/admin');
 const validateObjectId = require('../middleware/validateObjectId');
 const { Quote, validateQuote, validateQuoteResponse } = require('../models/Quote');
+const { Notification } = require('../models/Notification');
+
+const sendPushNotification = require('../utils/sendPushNotification');
+const { User } = require('../models/User');
 
 const router = express.Router();
 
@@ -34,7 +38,27 @@ router.patch('/admin/:id/respond', [auth, admin, validateObjectId], async (req, 
 
     await quote.save();
 
-    // Later: send push notification to user here
+    await Notification.create({
+      userId: quote.userId,
+      title: 'Quote Response',
+      message: `Your quote "${quote.title}" has received a response.`,
+      type: 'quote',
+      relatedQuoteId: quote._id,
+    });
+
+    const quoteUser = await User.findById(quote.userId);
+
+    if (quoteUser) {
+      await sendPushNotification(
+        quoteUser.expoPushTokens,
+        'Quote Response',
+        `Your quote "${quote.title}" has been answered.`,
+        {
+          type: 'quote',
+          quoteId: quote._id.toString(),
+        }
+      );
+    }
 
     res.send(quote);
   } catch (err) {
@@ -90,8 +114,29 @@ router.post('/', auth, async (req, res) => {
 
     await quote.save();
 
-    // Later: forward quote to company/retailer portal here
-    // Later: notify staff/admin here
+    const admins = await User.find({ role: 'admin' });
+
+    for (const adminUser of admins) {
+      await Notification.create({
+        userId: adminUser._id,
+        title: 'New Quote Request',
+        message: `New quote request from ${req.user.Firstname || 'user'}.`,
+        type: 'admin_quote',
+        relatedQuoteId: quote._id,
+      });
+    }
+
+    for (const adminUser of admins) {
+      await sendPushNotification(
+        adminUser.expoPushTokens,
+        'New Quote Request',
+        `New quote request from ${req.user.Firstname || 'user'}`,
+        {
+          type: 'admin_quote',
+          quoteId: quote._id.toString(),
+        }
+      );
+    }
 
     res.status(201).send(quote);
   } catch (err) {

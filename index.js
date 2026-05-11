@@ -1,3 +1,13 @@
+const crypto = require('crypto');
+
+if (!globalThis.crypto) {
+  globalThis.crypto = crypto.webcrypto;
+}
+
+require('@dotenvx/dotenvx').config();
+
+// rest of your imports...
+
 require('dotenv').config();
 
 const express = require('express');
